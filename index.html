@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meraki by Saima — Hand-finished Pakistani womenswear</title>
+<meta name="description" content="A small, considered collection of hand-embroidered Pakistani womenswear, made in Lahore and shipped worldwide.">
+<link rel="icon" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <div class="hdr">
+    <nav>
+      <a class="navlink" href="#/collection">Collection</a>
+      <a class="navlink" href="#/ready">Ready Now</a>
+      <a class="navlink" href="#/made-to-order">Made to Order</a>
+      <a class="navlink" href="#/story">Our Story</a>
+    </nav>
+    <a class="brand" href="#/"><img src="img/logo.png" alt="Meraki by Saima"></a>
+    <div class="right">
+      <button class="inquiry-btn" data-nav="#/inquiry">Inquiry <span class="badge" id="bag-count">0</span></button>
+    </div>
+  </div>
+  <div class="mobnav">
+    <a class="navlink" href="#/collection">Collection</a>
+    <a class="navlink" href="#/ready">Ready Now</a>
+    <a class="navlink" href="#/made-to-order">Made to Order</a>
+    <a class="navlink" href="#/story">Our Story</a>
+  </div>
+</header>
+
+<main>
+
+<!-- ============ HOME ============ -->
+<div class="view" id="view-home">
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Pakistani womenswear · Lahore &amp; worldwide</p>
+      <h1 class="display">Timeless pieces,<br><em>thoughtfully made.</em></h1>
+      <p class="lede">A small, considered collection — hand-finished embroidery, fluid silks, and pieces cut to your measurements.</p>
+      <div class="btnrow">
+        <button class="pill pill-dark" data-nav="#/collection">View the collection</button>
+        <button class="pill pill-ghost" data-nav="#/ready">Ready now</button>
+      </div>
+    </div>
+    <div class="hero-img">
+      <img src="img/p5.webp" alt="Meraki look — Mehr">
+      <div class="hero-tag">
+        <p>MEHR</p>
+        <p>1 available · size 42</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="featured">
+    <div class="sec-head">
+      <h2 class="serif">The Roselle Collection</h2>
+      <a class="textlink" href="#/collection">All pieces</a>
+    </div>
+    <div class="grid" id="featured-grid"></div>
+  </section>
+
+  <section class="split" id="story">
+    <div class="split-img"><img src="img/p2.webp" alt="Meraki editorial"></div>
+    <div class="split-copy">
+      <p class="eyebrow">Our story</p>
+      <p class="pull">Meraki — to leave a piece of yourself in what you make. Every panel is embroidered by hand, then cut for one woman at a time.</p>
+      <p class="body">Saima works with a small atelier in Lahore. Silks and raw cottons are sourced by the bolt, embroideries are drawn to order, and nothing is produced in volume — which is why some pieces exist only once.</p>
+    </div>
+  </section>
+
+  <section class="mto" id="made-to-order">
+    <div style="flex:1 1 340px;display:flex;flex-direction:column;gap:24px">
+      <h2 class="serif" style="font-size:clamp(30px,4vw,52px)">Made for you</h2>
+      <p class="body" style="max-width:42ch">Selected designs are created to order in your preferred size. Tell us what you like and we will guide you through fabric, sizing and timing.</p>
+      <div class="steps">
+        <div><span>01</span><span>Send an inquiry with the looks you love</span></div>
+        <div><span>02</span><span>We confirm sizing, fabric and price over WhatsApp</span></div>
+        <div><span>03</span><span>Your piece is cut, embroidered and shipped in 4–6 weeks</span></div>
+      </div>
+    </div>
+    <div class="mto-img"><img src="img/p7.webp" alt="Made to order"></div>
+  </section>
+
+  <section class="cta">
+    <p class="eyebrow">Personal service</p>
+    <h2>Choose the pieces you love. We will take care of the rest.</h2>
+    <button class="pill pill-accent" data-nav="#/collection">Begin an inquiry</button>
+  </section>
+</div>
+
+<!-- ============ COLLECTION ============ -->
+<div class="view hidden pagepad" id="view-collection">
+  <h1 class="page">The Collection</h1>
+  <p class="subtle" id="collection-count"></p>
+  <div class="filters" id="filters">
+    <button data-filter="all" aria-pressed="true">All pieces</button>
+    <button data-filter="ready" aria-pressed="false">Ready now</button>
+    <button data-filter="mto" aria-pressed="false">Made to order</button>
+  </div>
+  <div class="grid" id="collection-grid"></div>
+</div>
+
+<!-- ============ PRODUCT ============ -->
+<div class="view hidden pagepad" id="view-product" style="padding-top:clamp(20px,3vw,34px)">
+  <a class="back" href="#/collection">← Collection</a>
+  <div class="pdp">
+    <div class="gallery">
+      <div class="main"><img id="pdp-hero" src="img/p1.webp" alt=""></div>
+      <div class="thumbs" id="pdp-thumbs"></div>
+    </div>
+    <div class="pdp-info">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <h1 class="pname" id="pdp-name"></h1>
+        <p class="pprice" id="pdp-price"></p>
+        <p class="pstatus"><span class="dot" id="pdp-dot"></span><span id="pdp-status"></span></p>
+      </div>
+      <p class="desc" id="pdp-desc"></p>
+      <div style="display:flex;flex-direction:column;gap:12px;padding-top:6px">
+        <div class="sizes-head">
+          <p class="label">Size</p>
+          <span class="label">Sizes 38–46 &amp; custom</span>
+        </div>
+        <div class="sizes" id="pdp-sizes"></div>
+      </div>
+      <button class="add" id="pdp-add" data-state="idle">Select a size</button>
+      <p class="note" id="pdp-delivery"></p>
+      <div class="specs" id="pdp-specs"></div>
+    </div>
+  </div>
+  <div class="also">
+    <p>You may also like</p>
+    <div class="grid small" id="pdp-related"></div>
+  </div>
+</div>
+
+<!-- ============ INQUIRY ============ -->
+<div class="view hidden pagepad inq" id="view-inquiry">
+  <div id="inq-form-wrap">
+    <h1 class="page">Your inquiry</h1>
+    <p class="subtle" id="bag-label">Nothing selected yet</p>
+    <div class="inq-cols">
+      <div class="bag" id="bag-list"></div>
+      <form class="form" id="inquiry-form" novalidate>
+        <p>Tell us a little about you</p>
+        <label>Name<input name="name" placeholder="Your name" autocomplete="name"></label>
+        <label>Phone / WhatsApp<input name="phone" placeholder="+92 300 0000000" autocomplete="tel"></label>
+        <label>Email<input name="email" type="email" placeholder="you@email.com" autocomplete="email"></label>
+        <label>Anything else<textarea name="note" rows="3" placeholder="Occasion, dates, alterations…"></textarea></label>
+        <button class="submit" id="inq-submit" type="submit" data-ready="false">Request these looks</button>
+        <p>No payment is taken now. We reply personally on WhatsApp or email.</p>
+      </form>
+    </div>
+  </div>
+  <div class="thanks hidden" id="inq-thanks">
+    <h1>Thank you.</h1>
+    <p>Saima will write to you personally within one working day to confirm sizing, fabric and timing.</p>
+    <button class="pill pill-ghost sm" data-nav="#/collection">Continue browsing</button>
+  </div>
+</div>
+
+</main>
+
+<footer>
+  <div class="fcols">
+    <div class="fcol">
+      <img src="img/logo.png" alt="Meraki by Saima">
+      <p class="blurb">Hand-finished womenswear, made in Lahore. Shipping worldwide.</p>
+    </div>
+    <div class="fcol">
+      <p class="head">Shop</p>
+      <a href="#/collection">Collection</a>
+      <a href="#/ready">Ready now</a>
+      <a href="#/made-to-order">Made to order</a>
+    </div>
+    <div class="fcol">
+      <p class="head">Contact</p>
+      <a href="https://wa.me/" target="_blank" rel="noopener">WhatsApp</a>
+      <a href="mailto:hello@merakibysaima.com">hello@merakibysaima.com</a>
+      <a href="https://instagram.com" target="_blank" rel="noopener">Instagram</a>
+    </div>
+    <div class="fcol">
+      <p class="head">Service</p>
+      <p class="line">Made to order · 4–6 weeks</p>
+      <p class="line">Sizes 38 – 46 &amp; custom</p>
+      <p class="line">Lahore, Pakistan</p>
+    </div>
+  </div>
+  <p class="copyright">© 2026 Meraki by Saima</p>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
