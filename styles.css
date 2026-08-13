@@ -43,6 +43,9 @@ header{position:sticky;top:0;z-index:60;background:rgba(251,248,244,.9);
 .badge{min-width:19px;height:19px;border-radius:999px;background:var(--plum);color:#fff;
   display:inline-flex;align-items:center;justify-content:center;font-size:10px;letter-spacing:0;padding:0 5px}
 .mobnav{display:none;gap:22px;padding:11px 18px 12px;overflow-x:auto;border-top:1px solid rgba(42,31,34,.06)}
+/* The links fill the bar's full height so the whole strip is tappable, not just
+   the 11px of text. The negative margins cancel the padding, so nothing moves. */
+.mobnav .navlink{padding:11px 0 12px;margin:-11px 0 -12px;display:flex;align-items:center}
 @media(max-width:899px){.hdr nav{display:none}.mobnav{display:flex}}
 
 main{flex:1 1 auto}
@@ -198,3 +201,6 @@ footer{border-top:1px solid rgba(42,31,34,.11);padding:clamp(44px,5vw,72px) var(
 .fcol a,.fcol .line{font:300 13px/1.7 var(--sans);color:var(--ink);margin:0}
 .copyright{margin:0;font:300 11px/1 var(--sans);letter-spacing:.14em;color:var(--faint)}
 .hidden{display:none!important}
+/* A button that cannot be pressed should not offer a pointer. Colours are already
+   set explicitly above, so disabling changes nothing else visually. */
+button:disabled{cursor:default}

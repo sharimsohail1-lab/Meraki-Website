@@ -5,7 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Meraki by Saima — Hand-finished Pakistani womenswear</title>
 <meta name="description" content="A small, considered collection of hand-embroidered Pakistani womenswear, made in Lahore and shipped worldwide.">
-<link rel="icon" href="img/logo.png">
+<link rel="canonical" href="https://merakibysaima.com/">
+<meta name="theme-color" content="#FBF8F4">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Meraki by Saima">
+<meta property="og:title" content="Meraki by Saima — Hand-finished Pakistani womenswear">
+<meta property="og:description" content="A small, considered collection of hand-embroidered Pakistani womenswear, made in Lahore and shipped worldwide.">
+<meta property="og:url" content="https://merakibysaima.com/">
+<meta property="og:image" content="https://merakibysaima.com/img/og.jpg">
+<meta property="og:image:alt" content="A Meraki by Saima look — rose pink silk with a saffron dupatta.">
+<meta property="og:locale" content="en_GB">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="img/icon.png" sizes="180x180" type="image/png">
+<link rel="apple-touch-icon" href="img/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
@@ -15,23 +29,23 @@
 
 <header>
   <div class="hdr">
-    <nav>
+    <nav aria-label="Primary">
       <a class="navlink" href="#/collection">Collection</a>
       <a class="navlink" href="#/ready">Ready Now</a>
       <a class="navlink" href="#/made-to-order">Made to Order</a>
       <a class="navlink" href="#/story">Our Story</a>
     </nav>
-    <a class="brand" href="#/"><img src="img/logo.png" alt="Meraki by Saima"></a>
+    <a class="brand" href="#/"><img src="img/logo.png" alt="Meraki by Saima" width="330" height="220"></a>
     <div class="right">
-      <button class="inquiry-btn" data-nav="#/inquiry">Inquiry <span class="badge" id="bag-count">0</span></button>
+      <button class="inquiry-btn" data-nav="#/inquiry">Inquiry <span class="badge" id="bag-count" aria-live="polite">0</span></button>
     </div>
   </div>
-  <div class="mobnav">
+  <nav class="mobnav" aria-label="Primary, compact">
     <a class="navlink" href="#/collection">Collection</a>
     <a class="navlink" href="#/ready">Ready Now</a>
     <a class="navlink" href="#/made-to-order">Made to Order</a>
     <a class="navlink" href="#/story">Our Story</a>
-  </div>
+  </nav>
 </header>
 
 <main>
@@ -49,7 +63,11 @@
       </div>
     </div>
     <div class="hero-img">
-      <img src="img/p5.webp" alt="Meraki look — Mehr">
+      <img src="img/p5.webp"
+           srcset="img/sm/p5.webp 560w, img/md/p5.webp 960w, img/p5.webp 1400w"
+           sizes="(max-width:940px) 100vw, 53vw"
+           alt="Meraki look — Mehr, rose pink silk with a saffron chiffon dupatta"
+           fetchpriority="high" decoding="async">
       <div class="hero-tag">
         <p>MEHR</p>
         <p>1 available · size 42</p>
@@ -66,7 +84,13 @@
   </section>
 
   <section class="split" id="story">
-    <div class="split-img"><img src="img/p2.webp" alt="Meraki editorial"></div>
+    <div class="split-img">
+      <img src="img/p2.webp"
+           srcset="img/sm/p2.webp 560w, img/p2.webp 938w"
+           sizes="(max-width:860px) 100vw, 52vw"
+           alt="Meraki editorial — an ivory crepe jacket with resham bird and vine embroidery"
+           loading="lazy" decoding="async">
+    </div>
     <div class="split-copy">
       <p class="eyebrow">Our story</p>
       <p class="pull">Meraki — to leave a piece of yourself in what you make. Every panel is embroidered by hand, then cut for one woman at a time.</p>
@@ -84,7 +108,13 @@
         <div><span>03</span><span>Your piece is cut, embroidered and shipped in 4–6 weeks</span></div>
       </div>
     </div>
-    <div class="mto-img"><img src="img/p7.webp" alt="Made to order"></div>
+    <div class="mto-img">
+      <img src="img/p7.webp"
+           srcset="img/sm/p7.webp 560w, img/p7.webp 937w"
+           sizes="(max-width:968px) 100vw, 43vw"
+           alt="Made to order — deep indigo raw silk with an embroidered bird-and-blossom panel"
+           loading="lazy" decoding="async">
+    </div>
   </section>
 
   <section class="cta">
@@ -98,7 +128,7 @@
 <div class="view hidden pagepad" id="view-collection">
   <h1 class="page">The Collection</h1>
   <p class="subtle" id="collection-count"></p>
-  <div class="filters" id="filters">
+  <div class="filters" id="filters" role="group" aria-label="Filter the collection">
     <button data-filter="all" aria-pressed="true">All pieces</button>
     <button data-filter="ready" aria-pressed="false">Ready now</button>
     <button data-filter="mto" aria-pressed="false">Made to order</button>
@@ -111,7 +141,10 @@
   <a class="back" href="#/collection">← Collection</a>
   <div class="pdp">
     <div class="gallery">
-      <div class="main"><img id="pdp-hero" src="img/p1.webp" alt=""></div>
+      <!-- No src here on purpose: this view is hidden on load and script.js sets
+           the photograph when a product is opened. A hardcoded src would make
+           every visitor download a full-size photo they may never see. -->
+      <div class="main"><img id="pdp-hero" alt="Meraki look" decoding="async"></div>
       <div class="thumbs" id="pdp-thumbs"></div>
     </div>
     <div class="pdp-info">
@@ -126,7 +159,7 @@
           <p class="label">Size</p>
           <span class="label">Sizes 38–46 &amp; custom</span>
         </div>
-        <div class="sizes" id="pdp-sizes"></div>
+        <div class="sizes" id="pdp-sizes" role="group" aria-label="Choose a size"></div>
       </div>
       <button class="add" id="pdp-add" data-state="idle">Select a size</button>
       <p class="note" id="pdp-delivery"></p>
@@ -169,7 +202,7 @@
 <footer>
   <div class="fcols">
     <div class="fcol">
-      <img src="img/logo.png" alt="Meraki by Saima">
+      <img src="img/logo.png" alt="Meraki by Saima" width="330" height="220" loading="lazy">
       <p class="blurb">Hand-finished womenswear, made in Lahore. Shipping worldwide.</p>
     </div>
     <div class="fcol">

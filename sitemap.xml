@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The site is a single HTML document; every view is a #/hash route, and search
+     engines do not index hash fragments as separate pages. One URL is therefore
+     the honest sitemap. See the README if per-product URLs are ever wanted. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://merakibysaima.com/</loc>
+    <changefreq>weekly</changefreq>
+  </url>
+</urlset>
