@@ -85,12 +85,13 @@ things to embarrass you on launch day.
 
 ## Domain
 
-`www.merakibysaima.com` is the primary domain — the bare `merakibysaima.com` redirects
-to it — and it is used in the canonical URL, the Open Graph tags, `robots.txt` and
-`sitemap.xml`. If the primary domain ever changes, update all four together.
+`merakibysaima.com` is the primary domain — `www.merakibysaima.com` redirects to it —
+and it is used in the canonical URL, the Open Graph tags, `robots.txt` and `sitemap.xml`.
+If the primary domain ever changes, update all four together, or search engines will be
+told the canonical address is a URL that only redirects.
 
-The contact email `hello@merakibysaima.com` is deliberately left on the bare domain;
-mail routing is unrelated to which hostname serves the website.
+The contact address `hello@merakibysaima.com` is unrelated: mail routing has nothing to
+do with which hostname serves the website.
 
 ## Copyright year
 
