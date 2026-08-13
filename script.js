@@ -80,10 +80,18 @@ function imgHTML(src, alt, sizes, attrs) {
     ' ' + (attrs || '') + '>';
 }
 
-/* The photographs a product page can show. A product may carry its own
-   `images: [...]` array; otherwise it shows its single photograph. */
+/* The photographs a product page can show, normalised to { src, alt }.
+
+   A product may carry its own ordered `images: [...]` array — each entry is
+   either a bare path or an object like { src, alt, role } — otherwise the page
+   shows its single photograph. Only ever this product's own photographs: other
+   garments belong in "You may also like", never in the gallery. */
 function shotsFor(p) {
-  return (p.images && p.images.length) ? p.images : [p.image];
+  var list = (p.images && p.images.length) ? p.images : [p.image];
+  return list.map(function (entry) {
+    var shot = (typeof entry === 'string') ? { src: entry } : (entry || {});
+    return { src: shot.src, alt: shot.alt || p.name };
+  }).filter(function (shot) { return !!shot.src; });
 }
 
 /* ---------- cards ---------- */
@@ -113,19 +121,23 @@ function renderProduct() {
   var p = find(state.pid);
   var others = PRODUCTS.filter(function (x) { return x.id !== p.id; });
   var shots = shotsFor(p);
-  if (shots.length < 4) shots = shots.concat(others.slice(0, 4 - shots.length).map(function (x) { return x.image; }));
   if (state.shot >= shots.length) state.shot = 0;
 
   var hero = byId('pdp-hero');
-  hero.src = shots[state.shot];
-  hero.alt = p.name;
-  var heroSet = IMG_SRCSET[shots[state.shot]];
+  hero.src = shots[state.shot].src;
+  hero.alt = shots[state.shot].alt;
+  var heroSet = IMG_SRCSET[shots[state.shot].src];
   if (heroSet) { hero.srcset = heroSet; hero.sizes = '(max-width:900px) 100vw, 46vw'; }
   else { hero.removeAttribute('srcset'); hero.removeAttribute('sizes'); }
 
-  byId('pdp-thumbs').innerHTML = shots.map(function (src, i) {
+  /* One photograph needs no thumbnail strip. Hiding the container rather than
+     just emptying it also removes the gallery's 14px flex gap, which an empty
+     strip would otherwise leave under the main image. */
+  var thumbs = byId('pdp-thumbs');
+  thumbs.classList.toggle('hidden', shots.length < 2);
+  thumbs.innerHTML = shots.length < 2 ? '' : shots.map(function (s, i) {
     return '<button data-shot="' + i + '" aria-pressed="' + (state.shot === i) + '" aria-label="View ' + (i + 1) + '">' +
-      imgHTML(src, 'View ' + (i + 1), '(max-width:900px) 24vw, 130px',
+      imgHTML(s.src, s.alt, '(max-width:900px) 24vw, 130px',
         'loading="lazy" decoding="async" style="object-position:' + (i === 0 ? '50% 15%' : '50% 30%') + '"') +
       '</button>';
   }).join('');
