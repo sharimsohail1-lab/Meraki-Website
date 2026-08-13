@@ -4,7 +4,7 @@
      the honest sitemap. See the README if per-product URLs are ever wanted. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://www.merakibysaima.com/</loc>
+    <loc>https://merakibysaima.com/</loc>
     <changefreq>weekly</changefreq>
   </url>
 </urlset>

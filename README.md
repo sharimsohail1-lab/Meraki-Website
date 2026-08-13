@@ -14,7 +14,7 @@ deployed straight to Vercel.
 | `img/source/` | The files exactly as delivered by Claude Design — the highest-resolution copies we have. Never served to visitors. If higher-resolution masters exist elsewhere, put those here instead and re-run the optimiser. |
 | `tools/optimize-images.py` | Regenerates everything in `img/` from `img/source/`. |
 | `vercel.json` | Cache and security headers. No build configuration — there is nothing to build. |
-| `robots.txt`, `sitemap.xml` | Search engine basics. Both reference `www.merakibysaima.com`. |
+| `robots.txt`, `sitemap.xml` | Search engine basics. Both reference `merakibysaima.com`. |
 
 ## Preview locally
 
@@ -35,11 +35,11 @@ No configuration needed — Vercel serves this as a static site automatically.
 2. In Vercel, **Add New → Project** and import that repository.
 3. Framework preset: **Other**. Leave build command empty. Output directory: leave as the root.
 4. Deploy.
-5. Under **Settings → Domains**, add `www.merakibysaima.com` and set it as the primary
-   domain. `merakibysaima.com` redirects to it, so the canonical URL, the Open Graph
-   tags, `robots.txt` and `sitemap.xml` all use the `www` form. If the primary domain
-   ever changes, those four must change with it or search engines will be told the
-   page's canonical address is a URL that only redirects.
+5. Under **Settings → Domains**, add `merakibysaima.com` and keep it as the primary
+   domain. `www.merakibysaima.com` redirects to it, so the canonical URL, the Open
+   Graph tags, `robots.txt` and `sitemap.xml` all use the bare form. If the primary
+   domain ever changes, those four have to change with it — otherwise search engines
+   are told the page's canonical address is a URL that only redirects.
 
 The site works from the root URL. All asset paths are relative (`img/…`, `styles.css`,
 `script.js`), so it also works if you serve it from a subfolder.
