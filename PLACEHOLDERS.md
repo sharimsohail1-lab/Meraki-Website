@@ -85,9 +85,12 @@ things to embarrass you on launch day.
 
 ## Domain
 
-`merakibysaima.com` appears in the Design package's README and is now also used in the
-canonical URL, the Open Graph tags, `robots.txt` and `sitemap.xml`. If the real domain
-differs, update those four places plus `index.html`.
+`www.merakibysaima.com` is the primary domain — the bare `merakibysaima.com` redirects
+to it — and it is used in the canonical URL, the Open Graph tags, `robots.txt` and
+`sitemap.xml`. If the primary domain ever changes, update all four together.
+
+The contact email `hello@merakibysaima.com` is deliberately left on the bare domain;
+mail routing is unrelated to which hostname serves the website.
 
 ## Copyright year
 
