@@ -31,14 +31,21 @@ var REQUEST_TIMEOUT_MS = 8000;
    after the canonical ones, rather than silently losing sizes. */
 var SIZE_ORDER = ['38', '40', '42', '44', '46', '48', '50', '52', 'Free Size'];
 
-/* Named so a new column cannot join the query by accident. */
+/* Named so a new column cannot join the query by accident. website_status and
+   is_archived are read for the visibility check below and are never projected. */
 var PRODUCT_COLUMNS = [
   'id', 'sku', 'name', 'description_en', 'price',
   'collection_name', 'collection_names',
   'fabric', 'pieces', 'color', 'made', 'care',
   'slug', 'website_status', 'website_availability', 'website_published_at',
-  'size_inventory'
-].join(',');
+  'size_inventory', 'is_archived'
+];
+
+/* Columns the app is still adding. Selecting a column Postgres does not have
+   yet is a hard 400, so these are requested optimistically and dropped on the
+   one retry if the database says it has never heard of them. When the migration
+   lands the field starts flowing with no change here. */
+var OPTIONAL_PRODUCT_COLUMNS = ['fulfillment_note'];
 
 /* storage_key is deliberately absent: the storefront has no use for it and it
    cannot leak a field it never fetched. An image with no public_url is dropped
@@ -84,13 +91,40 @@ function supabaseSelect(path) {
 /* ---------------------------------------------------------------------------
  * Data source. Two queries, whatever the catalogue size — never one per product.
  * ------------------------------------------------------------------------- */
-function readPublishedProducts() {
-  var productPath = 'products'
-    + '?select=' + encodeURIComponent(PRODUCT_COLUMNS)
-    + '&website_status=eq.published'
-    + '&order=created_at.desc';
+/* A product reaches the storefront only if the app published it AND it is not
+   archived. Archiving is how Saima retires a piece; a stale 'published' left on
+   an archived row must not put it back in the collection. Enforced in the query
+   so the rows never travel, and again in code below so neither guard alone is
+   load-bearing.
 
-  return supabaseSelect(productPath).then(function (products) {
+   not.is.true rather than is.false: the column is nullable, and a NULL means
+   "never archived", which must stay visible. */
+function isStorefrontVisible(row) {
+  return !!row && row.website_status === 'published' && row.is_archived !== true;
+}
+
+function productQuery(columns) {
+  return 'products'
+    + '?select=' + encodeURIComponent(columns.join(','))
+    + '&website_status=eq.published'
+    + '&is_archived=not.is.true'
+    + '&order=created_at.desc';
+}
+
+function readProductRows() {
+  var withOptional = PRODUCT_COLUMNS.concat(OPTIONAL_PRODUCT_COLUMNS);
+  return supabaseSelect(productQuery(withOptional)).catch(function (err) {
+    var message = String((err && err.message) || '');
+    var missing = OPTIONAL_PRODUCT_COLUMNS.some(function (c) { return message.indexOf(c) !== -1; });
+    if (!missing) throw err;
+    /* The app has not shipped the column yet. Fall back once, quietly. */
+    return supabaseSelect(productQuery(PRODUCT_COLUMNS));
+  });
+}
+
+function readPublishedProducts() {
+  return readProductRows().then(function (rows) {
+    var products = (rows || []).filter(isStorefrontVisible);
     if (!products.length) return [];
 
     /* One batched follow-up for every product's images, filtered and ordered by
@@ -218,10 +252,11 @@ function publicProduct(row) {
       ? null : row.website_availability,
     sizes: availableSizeLabels(row.size_inventory),
 
-    /* The app has no fulfilment-note column today, so there is nothing to
-       publish and the storefront hides its delivery line. Timing is never
-       inferred from availability. When the app adds the field, map it here. */
-    fulfillment_note: null,
+    /* Whatever the app published about this piece's timing, and nothing else.
+       Absent means the storefront hides its delivery line — never a fabricated
+       sentence, never the global lead time, and never anything inferred from
+       availability. */
+    fulfillment_note: blank(row.fulfillment_note) ? null : String(row.fulfillment_note).trim(),
 
     garment_details: {
       fabric: row.fabric || null,
@@ -285,6 +320,7 @@ module.exports = function handler(req, res) {
 
 /* Exported for tests; the handler above is the entry point Vercel calls. */
 module.exports.publicProduct = publicProduct;
+module.exports.isStorefrontVisible = isStorefrontVisible;
 module.exports.publicImage = publicImage;
 module.exports.availableSizeLabels = availableSizeLabels;
 module.exports.collectionNames = collectionNames;
