@@ -172,27 +172,19 @@ var IMG_SRCSET = {
    MAPPING LAYER — the only place that understands the published contract
    ========================================================================== */
 
-/* How each availability value presents to a customer. The website says what it
-   knows — that a piece is ready or made to order — and never a quantity: the
-   contract carries no stock counts and the site must not imply any. Which
-   sizes exist is the only stock-shaped fact on the page, and it comes from
-   `sizes`. */
+/* How each availability value presents to a customer.
+
+   Availability is an inventory state and nothing more. It says whether a piece
+   exists now or is cut to order; it cannot say how quickly Saima ships, so the
+   website never derives a shipping time from it. A quantity is likewise never
+   implied — the contract carries no stock counts. Which sizes exist is the only
+   stock-shaped fact on the page, and that comes from `sizes`.
+
+   A per-piece timing promise belongs to the app, in `fulfillment_note`. */
 var AVAILABILITY = {
-  ready_now: {
-    label: 'Ready now',
-    dot: '#7A8B5A',
-    delivery: 'In stock. Ships within 48 hours.'
-  },
-  made_to_order: {
-    label: 'Made to order · 4–6 weeks',
-    dot: '#A6802E',
-    delivery: 'Estimated delivery 4–6 weeks from confirmation.'
-  },
-  both: {
-    label: 'Ready now · also made to order',
-    dot: '#7A8B5A',
-    delivery: 'In stock in some sizes. Other sizes are made to order in 4–6 weeks.'
-  }
+  ready_now:     { label: 'Ready now',                      dot: '#7A8B5A' },
+  made_to_order: { label: 'Made to order · 4–6 weeks',      dot: '#A6802E' },
+  both:          { label: 'Ready now · also made to order', dot: '#7A8B5A' }
 };
 
 var GARMENT_ROWS = [
@@ -296,7 +288,9 @@ function mapProduct(raw) {
     availability: raw.availability || 'made_to_order',
     availabilityLabel: avail.label,
     dot: avail.dot,
-    delivery: avail.delivery,
+    /* Only ever what the app actually says about fulfilment. Absent means the
+       line is not rendered at all — silence rather than a guess. */
+    delivery: blank(raw.fulfillment_note) ? '' : String(raw.fulfillment_note).trim(),
     sizes: sizes.length ? sizes : [CUSTOM_SIZE],
     details: mapGarmentDetails(raw.garment_details),
     images: mapImages(raw.images, raw.name || ''),
@@ -391,7 +385,24 @@ function matchesFilter(p, filter) {
   return p.availability === 'made_to_order' || p.availability === 'both';
 }
 
+/* Which piece the home hero photograph shows. The caption is read from the
+   catalogue rather than written into the markup, so it cannot contradict the
+   product page or outlive the piece. The photograph itself is still in
+   index.html — see the comment there. */
+var HERO_SLUG = 'mehr';
+
+function renderHeroTag() {
+  var tag = byId('hero-tag');
+  if (!tag) return;
+  var p = findProductBySlug(HERO_SLUG);
+  tag.classList.toggle('hidden', !p);
+  if (!p) return;
+  byId('hero-name').textContent = p.name;
+  byId('hero-status').textContent = p.availabilityLabel;
+}
+
 function renderGrids() {
+  renderHeroTag();
   byId('featured-grid').innerHTML = PRODUCTS.slice(0, 4).map(function (p) { return cardHTML(p); }).join('');
   var shown = PRODUCTS.filter(function (p) { return matchesFilter(p, state.filter); });
   byId('collection-grid').innerHTML = shown.map(function (p) { return cardHTML(p); }).join('');
@@ -457,7 +468,12 @@ function renderProduct() {
   byId('pdp-status').textContent = p.availabilityLabel;
   byId('pdp-dot').style.background = p.dot;
   byId('pdp-desc').textContent = p.description;
-  byId('pdp-delivery').textContent = p.delivery;
+
+  /* No fulfilment note published means no line — an empty <p> would still take
+     its place in the flex column and leave a gap under the button. */
+  var deliveryEl = byId('pdp-delivery');
+  deliveryEl.textContent = p.delivery;
+  deliveryEl.classList.toggle('hidden', blank(p.delivery));
 
   byId('pdp-sizes').innerHTML = p.sizes.map(function (s) {
     return '<button data-size="' + esc(s) + '" aria-pressed="' + (state.size === s) + '">' + esc(s) + '</button>';

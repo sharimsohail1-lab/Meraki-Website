@@ -68,9 +68,13 @@
            sizes="(max-width:940px) 100vw, 53vw"
            alt="Meraki look — Mehr, rose pink silk with a saffron chiffon dupatta"
            fetchpriority="high" decoding="async">
-      <div class="hero-tag">
-        <p>MEHR</p>
-        <p>1 available · size 42</p>
+      <!-- Filled from the catalogue by script.js (HERO_SLUG), so it can never
+           drift from what the product page says. Hidden if that piece is not
+           published. The photograph above stays in the markup so the preload
+           scanner can still find it for LCP. -->
+      <div class="hero-tag hidden" id="hero-tag">
+        <p id="hero-name"></p>
+        <p id="hero-status"></p>
       </div>
     </div>
   </section>
