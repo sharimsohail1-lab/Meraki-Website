@@ -1,48 +1,159 @@
 /* Meraki by Saima — site behaviour.
-   All product content lives in PRODUCTS below. Edit here to add/change pieces. */
 
-var DOT = { ready: '#7A8B5A', mto: '#A6802E', limited: '#6E1436' };
+   Product data enters through exactly one door: mapProduct(). Everything below
+   the mapping layer renders the normalised shape and neither knows nor cares
+   whether a product came from the fixtures in this file, from the published
+   API, or from a test. When the API lands, only the source changes. */
 
-var PRODUCTS = [
-  { id:'noor', name:'NOOR', price:'$325', image:'img/p1.webp', type:'mto', status:'Made to order · 4–6 weeks',
-    delivery:'Estimated delivery 4–6 weeks from confirmation.',
-    description:'A chartreuse silk-cotton kurta with hand-appliquéd blooms and cutwork scallops at the cuff and hem.',
-    fabric:'Silk-cotton, hand embroidered', pieces:'Kurta, straight trouser', colour:'Chartreuse / rose' },
-  { id:'sahar', name:'SAHAR', price:'$480', image:'img/p2.webp', type:'limited', status:'Limited availability',
-    delivery:'Two pieces remain. Ships within 5 working days.',
-    description:'An ivory crepe front-open jacket, bordered in resham-embroidered bird and vine work.',
-    fabric:'Crepe, resham thread work', pieces:'Jacket, inner slip, trouser', colour:'Ivory / crimson' },
-  { id:'sabeen', name:'SABEEN', price:'$295', image:'img/p3.webp', type:'ready', status:'Ready now',
-    delivery:'In stock. Ships within 48 hours.',
-    description:'A fuchsia cape-sleeve top with scalloped pearl trim, cut wide and worn with a fluid palazzo.',
-    fabric:'Silk twill, pearl detailing', pieces:'Cape top, palazzo', colour:'Fuchsia' },
-  { id:'gulnaar', name:'GULNAAR', price:'$340', image:'img/p4.webp', type:'mto', status:'Made to order · 4–6 weeks',
-    delivery:'Estimated delivery 4–6 weeks from confirmation.',
-    description:'A hand-painted floral silk in peach and coral, finished with a lace-edged organza dupatta.',
-    fabric:'Printed silk, organza', pieces:'Kurta, trouser, dupatta', colour:'Peach / coral' },
-  { id:'mehr', name:'MEHR', price:'$520', image:'img/p5.webp', type:'limited', status:'1 available · size 42',
-    delivery:'One piece only, size 42. Ships within 48 hours.',
-    description:'Rose pink silk with gota and zardozi borders, worn with a saffron chiffon dupatta.',
-    fabric:'Silk, zardozi and gota work', pieces:'Kurta, trouser, dupatta', colour:'Rose / saffron' },
-  { id:'ayla', name:'AYLA', price:'$310', image:'img/p6.webp', type:'ready', status:'Ready now',
-    delivery:'In stock. Ships within 48 hours.',
-    description:'A magenta silk shirt with scattered pearl motifs and an ombré chiffon dupatta.',
-    fabric:'Silk, pearl hand work', pieces:'Shirt, trouser, ombré dupatta', colour:'Magenta / blush' },
-  { id:'roselle', name:'ROSELLE', price:'$395', image:'img/p7.webp', type:'mto', status:'Made to order · 4–6 weeks',
-    delivery:'Estimated delivery 4–6 weeks from confirmation.',
-    description:'Deep indigo raw silk with a single embroidered bird-and-blossom panel travelling the front hem.',
-    fabric:'Raw silk, thread embroidery', pieces:'Kurta, trouser', colour:'Indigo / multi' },
-  { id:'zarin', name:'ZARIN', price:'$360', image:'img/p8.webp', type:'ready', status:'Ready now',
-    delivery:'In stock. Ships within 48 hours.',
-    description:'Emerald silk-cotton with scalloped floral embroidery and a two-tone chiffon dupatta.',
-    fabric:'Silk-cotton, thread embroidery', pieces:'Kurta, trouser, dupatta', colour:'Emerald / pink' }
+/* ============================================================================
+   FIXTURES
+
+   Temporary stand-ins shaped exactly like the app's published product payload,
+   so the mapping is proven against the approved design before any network call
+   exists. Ids are placeholder UUIDs and deliberately are NOT the slugs: the
+   route uses `slug`, while the inquiry bag and every future database
+   relationship use `id`. The app's published names and slugs become
+   authoritative once the live integration lands.
+   ========================================================================== */
+
+var RAW_PRODUCTS = [
+  {
+    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10001',
+    slug: 'noor', sku: 'MBS-NOOR-01', name: 'NOOR',
+    description: 'A chartreuse silk-cotton kurta with hand-appliquéd blooms and cutwork scallops at the cuff and hem.',
+    price: 325, currency: 'USD',
+    collection_names: ['The Roselle Collection'],
+    availability: 'made_to_order',
+    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
+    garment_details: {
+      fabric: 'Silk-cotton, hand embroidered', pieces: 'Kurta, straight trouser',
+      color: 'Chartreuse / rose', made: 'Lahore, by hand',
+      care: 'Dry clean only. Store folded in muslin.'
+    },
+    images: [{ src: 'img/p1.webp', role: 'model', sort_order: 0, alt: null,
+               width: 1400, height: 2508, is_primary: true }],
+    published_at: '2026-08-01T00:00:00.000Z'
+  },
+  {
+    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10002',
+    slug: 'sahar', sku: 'MBS-SAHAR-01', name: 'SAHAR',
+    description: 'An ivory crepe front-open jacket, bordered in resham-embroidered bird and vine work.',
+    price: 480, currency: 'USD',
+    collection_names: ['The Roselle Collection'],
+    availability: 'ready_now',
+    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
+    garment_details: {
+      fabric: 'Crepe, resham thread work', pieces: 'Jacket, inner slip, trouser',
+      color: 'Ivory / crimson', made: 'Lahore, by hand',
+      care: 'Dry clean only. Store folded in muslin.'
+    },
+    images: [{ src: 'img/p2.webp', role: 'model', sort_order: 0, alt: null,
+               width: 938, height: 1677, is_primary: true }],
+    published_at: '2026-08-01T00:00:00.000Z'
+  },
+  {
+    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10003',
+    slug: 'sabeen', sku: 'MBS-SABEEN-01', name: 'SABEEN',
+    description: 'A fuchsia cape-sleeve top with scalloped pearl trim, cut wide and worn with a fluid palazzo.',
+    price: 295, currency: 'USD',
+    collection_names: ['The Roselle Collection'],
+    availability: 'ready_now',
+    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
+    garment_details: {
+      fabric: 'Silk twill, pearl detailing', pieces: 'Cape top, palazzo',
+      color: 'Fuchsia', made: 'Lahore, by hand',
+      care: 'Dry clean only. Store folded in muslin.'
+    },
+    images: [{ src: 'img/p3.webp', role: 'model', sort_order: 0, alt: null,
+               width: 938, height: 1677, is_primary: true }],
+    published_at: '2026-08-01T00:00:00.000Z'
+  },
+  {
+    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10004',
+    slug: 'gulnaar', sku: 'MBS-GULNAAR-01', name: 'GULNAAR',
+    description: 'A hand-painted floral silk in peach and coral, finished with a lace-edged organza dupatta.',
+    price: 340, currency: 'USD',
+    collection_names: ['The Roselle Collection'],
+    availability: 'made_to_order',
+    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
+    garment_details: {
+      fabric: 'Printed silk, organza', pieces: 'Kurta, trouser, dupatta',
+      color: 'Peach / coral', made: 'Lahore, by hand',
+      care: 'Dry clean only. Store folded in muslin.'
+    },
+    images: [{ src: 'img/p4.webp', role: 'model', sort_order: 0, alt: null,
+               width: 1400, height: 2508, is_primary: true }],
+    published_at: '2026-08-01T00:00:00.000Z'
+  },
+  {
+    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10005',
+    slug: 'mehr', sku: 'MBS-MEHR-01', name: 'MEHR',
+    description: 'Rose pink silk with gota and zardozi borders, worn with a saffron chiffon dupatta.',
+    price: 520, currency: 'USD',
+    collection_names: ['The Roselle Collection'],
+    availability: 'ready_now',
+    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
+    garment_details: {
+      fabric: 'Silk, zardozi and gota work', pieces: 'Kurta, trouser, dupatta',
+      color: 'Rose / saffron', made: 'Lahore, by hand',
+      care: 'Dry clean only. Store folded in muslin.'
+    },
+    images: [{ src: 'img/p5.webp', role: 'model', sort_order: 0, alt: null,
+               width: 1400, height: 2508, is_primary: true }],
+    published_at: '2026-08-01T00:00:00.000Z'
+  },
+  {
+    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10006',
+    slug: 'ayla', sku: 'MBS-AYLA-01', name: 'AYLA',
+    description: 'A magenta silk shirt with scattered pearl motifs and an ombré chiffon dupatta.',
+    price: 310, currency: 'USD',
+    collection_names: ['The Roselle Collection'],
+    availability: 'ready_now',
+    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
+    garment_details: {
+      fabric: 'Silk, pearl hand work', pieces: 'Shirt, trouser, ombré dupatta',
+      color: 'Magenta / blush', made: 'Lahore, by hand',
+      care: 'Dry clean only. Store folded in muslin.'
+    },
+    images: [{ src: 'img/p6.webp', role: 'model', sort_order: 0, alt: null,
+               width: 1400, height: 2508, is_primary: true }],
+    published_at: '2026-08-01T00:00:00.000Z'
+  },
+  {
+    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10007',
+    slug: 'roselle', sku: 'MBS-ROSELLE-01', name: 'ROSELLE',
+    description: 'Deep indigo raw silk with a single embroidered bird-and-blossom panel travelling the front hem.',
+    price: 395, currency: 'USD',
+    collection_names: ['The Roselle Collection'],
+    availability: 'made_to_order',
+    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
+    garment_details: {
+      fabric: 'Raw silk, thread embroidery', pieces: 'Kurta, trouser',
+      color: 'Indigo / multi', made: 'Lahore, by hand',
+      care: 'Dry clean only. Store folded in muslin.'
+    },
+    images: [{ src: 'img/p7.webp', role: 'model', sort_order: 0, alt: null,
+               width: 937, height: 1678, is_primary: true }],
+    published_at: '2026-08-01T00:00:00.000Z'
+  },
+  {
+    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10008',
+    slug: 'zarin', sku: 'MBS-ZARIN-01', name: 'ZARIN',
+    description: 'Emerald silk-cotton with scalloped floral embroidery and a two-tone chiffon dupatta.',
+    price: 360, currency: 'USD',
+    collection_names: ['The Roselle Collection'],
+    availability: 'ready_now',
+    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
+    garment_details: {
+      fabric: 'Silk-cotton, thread embroidery', pieces: 'Kurta, trouser, dupatta',
+      color: 'Emerald / pink', made: 'Lahore, by hand',
+      care: 'Dry clean only. Store folded in muslin.'
+    },
+    images: [{ src: 'img/p8.webp', role: 'model', sort_order: 0, alt: null,
+               width: 941, height: 1672, is_primary: true }],
+    published_at: '2026-08-01T00:00:00.000Z'
+  }
 ];
-
-var SIZES = ['38','40','42','44','46','Other / Custom'];
-
-/* Where inquiries go. Nothing is sent anywhere yet — see the README section
-   "Making the inquiry form live" for the three options and how to wire one up. */
-var INQUIRY_ENDPOINT = null;
 
 /* IMG-SRCSET:START — generated by tools/optimize-images.py, do not edit by hand */
 var IMG_SRCSET = {
@@ -57,14 +168,152 @@ var IMG_SRCSET = {
 };
 /* IMG-SRCSET:END */
 
-var state = { filter:'all', pid:'noor', size:null, shot:0, bag:[], sent:false };
+/* ============================================================================
+   MAPPING LAYER — the only place that understands the published contract
+   ========================================================================== */
+
+/* How each availability value presents to a customer.
+
+   Availability is an inventory state and nothing more. It says whether a piece
+   exists now or is cut to order; it cannot say how quickly Saima ships, so the
+   website never derives a shipping time from it. A quantity is likewise never
+   implied — the contract carries no stock counts. Which sizes exist is the only
+   stock-shaped fact on the page, and that comes from `sizes`.
+
+   A per-piece timing promise belongs to the app, in `fulfillment_note`. */
+var AVAILABILITY = {
+  ready_now:     { label: 'Ready now',                      dot: '#7A8B5A' },
+  made_to_order: { label: 'Made to order',                  dot: '#A6802E' },
+  both:          { label: 'Ready now · also made to order', dot: '#7A8B5A' }
+};
+
+var GARMENT_ROWS = [
+  ['fabric', 'Fabric'],
+  ['pieces', 'Pieces'],
+  ['color',  'Colour'],   /* contract key is `color`; customers read "Colour" */
+  ['made',   'Made'],
+  ['care',   'Care']
+];
+
+/* A size list is offered so the visitor can still start a conversation about a
+   piece whose sizes the app has not published. */
+var CUSTOM_SIZE = 'Other / Custom';
+
+function blank(v) { return v === null || v === undefined || String(v).trim() === ''; }
+
+function formatPrice(value, currency) {
+  if (blank(value)) return '';
+  if (typeof value !== 'number') return String(value);   /* already formatted */
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency', currency: currency || 'USD',
+      minimumFractionDigits: 0, maximumFractionDigits: value % 1 ? 2 : 0
+    }).format(value);
+  } catch (e) {
+    return '$' + value;
+  }
+}
+
+/* "img/sm/p1.webp 560w, img/p1.webp 1400w" from { 560: …, 1400: … }.
+
+   Falls back to the generated IMG_SRCSET for the local fixture photography, so
+   the renditions this repo already ships keep being used without duplicating
+   the generator's output into the fixtures. A remote image carrying its own
+   `variants` needs neither. An image with neither simply renders from `src`. */
+function srcsetFrom(variants, src) {
+  if (variants) {
+    var widths = Object.keys(variants)
+      .map(Number)
+      .filter(function (w) { return w > 0 && !blank(variants[w]); })
+      .sort(function (a, b) { return a - b; });
+    if (widths.length) {
+      return widths.map(function (w) { return variants[w] + ' ' + w + 'w'; }).join(', ');
+    }
+  }
+  return IMG_SRCSET[src] || '';
+}
+
+/* Ordered by sort_order, with the primary photograph first. Every renderer
+   treats images[0] as the hero, so hero selection is decided once, here. */
+function mapImages(list, fallbackAlt) {
+  var imgs = (list || [])
+    .map(function (raw, i) {
+      var img = (typeof raw === 'string') ? { src: raw } : (raw || {});
+      return {
+        src: img.src,
+        alt: blank(img.alt) ? fallbackAlt : img.alt,
+        role: img.role || null,
+        width: img.width || null,
+        height: img.height || null,
+        isPrimary: img.is_primary === true,
+        order: typeof img.sort_order === 'number' ? img.sort_order : i,
+        srcset: srcsetFrom(img.variants, img.src)
+      };
+    })
+    .filter(function (img) { return !blank(img.src); });
+
+  imgs.sort(function (a, b) { return a.order - b.order; });
+
+  for (var i = 0; i < imgs.length; i++) {
+    if (imgs[i].isPrimary) { imgs.unshift(imgs.splice(i, 1)[0]); break; }
+  }
+  return imgs;
+}
+
+/* [label, value] pairs worth showing. A blank value is dropped rather than
+   rendered as a labelled row with nothing beside it. */
+function mapGarmentDetails(details) {
+  var g = details || {};
+  return GARMENT_ROWS
+    .map(function (row) { return [row[1], g[row[0]]]; })
+    .filter(function (row) { return !blank(row[1]); });
+}
+
+/* The single door product data comes through. Everything downstream renders
+   this shape and never touches the raw payload. */
+function mapProduct(raw) {
+  if (!raw || blank(raw.id)) return null;
+  var avail = AVAILABILITY[raw.availability] || AVAILABILITY.made_to_order;
+  var sizes = (raw.sizes || []).filter(function (s) { return !blank(s); });
+
+  return {
+    id: raw.id,
+    slug: blank(raw.slug) ? raw.id : raw.slug,
+    sku: raw.sku || null,
+    name: raw.name || '',
+    description: raw.description || '',
+    price: formatPrice(raw.price, raw.currency),
+    priceValue: raw.price,
+    collections: raw.collection_names || [],
+    availability: raw.availability || 'made_to_order',
+    availabilityLabel: avail.label,
+    dot: avail.dot,
+    /* Only ever what the app actually says about fulfilment. Absent means the
+       line is not rendered at all — silence rather than a guess. */
+    delivery: blank(raw.fulfillment_note) ? '' : String(raw.fulfillment_note).trim(),
+    sizes: sizes.length ? sizes : [CUSTOM_SIZE],
+    details: mapGarmentDetails(raw.garment_details),
+    images: mapImages(raw.images, raw.name || ''),
+    publishedAt: raw.published_at || null
+  };
+}
+
+function mapProducts(list) {
+  return (list || []).map(mapProduct).filter(Boolean);
+}
+
+/* The normalised catalogue every renderer reads. Replaced wholesale when the
+   API lands — nothing below this line changes. */
+var PRODUCTS = mapProducts(RAW_PRODUCTS);
+
+var state = { filter:'all', slug:null, size:null, shot:0, bag:[], sent:false };
 
 /* Is the catalogue usable yet? 'loading' | 'ready' | 'error'.
 
-   The static PRODUCTS literal above is available the moment this file parses,
-   so we start at 'ready' and nothing about today's rendering is delayed. When
-   PRODUCTS later comes from a fetch, drive it through setCatalogueState()
-   instead — the views already read this flag and will do the right thing. */
+   The fixtures above are available the moment this file parses, so we start at
+   'ready' and nothing about today's rendering is delayed. When products later
+   come from a fetch, drive it through setCatalogueState() instead — the views
+   already read this flag and will do the right thing. */
 var catalogue = { status: 'ready', error: null };
 
 /* Deliberately holds no product data of its own: the catalogue lives in
@@ -80,11 +329,24 @@ function setCatalogueState(status, error) {
 var $ = function (s) { return document.querySelector(s); };
 var byId = function (id) { return document.getElementById(id); };
 
-/* Null when the id is unknown — including while the catalogue is still empty.
-   Callers must handle null rather than assuming a product came back. */
-var findProduct = function (id) {
+/* Identity is the id — a UUID once live. Never used in a URL. */
+function findProduct(id) {
   return PRODUCTS.filter(function (p) { return p.id === id; })[0] || null;
-};
+}
+
+/* Routing is the slug — human, shareable, stable across renames. Both return
+   null when unknown, including while the catalogue is still empty; callers
+   must handle that rather than assume a product came back. */
+function findProductBySlug(slug) {
+  return PRODUCTS.filter(function (p) { return p.slug === slug; })[0] || null;
+}
+
+/* Bags saved before ids and slugs were separated stored the slug under `id`.
+   Resolving by id first and slug second keeps those inquiries intact without
+   rewriting anything in storage. */
+function findBagProduct(id) {
+  return findProduct(id) || findProductBySlug(id);
+}
 
 /* Escape anything that ends up inside an HTML string below, so an apostrophe or
    an ampersand in a product name can never break the markup. */
@@ -94,86 +356,55 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-/* An <img> that serves the smallest rendition big enough for the box it sits in.
-   Photographs missing from IMG_SRCSET just fall back to the full-size src. */
-function imgHTML(src, alt, sizes, attrs) {
-  var set = IMG_SRCSET[src];
-  return '<img src="' + esc(src) + '" alt="' + esc(alt) + '"' +
-    (set ? ' srcset="' + esc(set) + '" sizes="' + esc(sizes) + '"' : '') +
+/* One image helper for every photograph on the site, local or remote. It takes
+   a normalised image and emits srcset only when renditions actually exist, so
+   a lone remote original still renders correctly from its src. */
+function imgHTML(image, sizes, attrs) {
+  if (!image || blank(image.src)) return '';
+  return '<img src="' + esc(image.src) + '" alt="' + esc(image.alt) + '"' +
+    (image.srcset ? ' srcset="' + esc(image.srcset) + '" sizes="' + esc(sizes) + '"' : '') +
     ' ' + (attrs || '') + '>';
-}
-
-/* The photographs a product page can show, normalised to { src, alt }.
-
-   A product may carry its own ordered `images: [...]` array — each entry is
-   either a bare path or an object like { src, alt, role } — otherwise the page
-   shows its single photograph. Only ever this product's own photographs: other
-   garments belong in "You may also like", never in the gallery. */
-function shotsFor(p) {
-  var list = (p.images && p.images.length) ? p.images : [p.image];
-  return list.map(function (entry) {
-    var shot = (typeof entry === 'string') ? { src: entry } : (entry || {});
-    return { src: shot.src, alt: shot.alt || p.name };
-  }).filter(function (shot) { return !!shot.src; });
-}
-
-/* The garment-detail rows, in display order. Keys are read from the product's
-   `garment_details` object when it has one, falling back to the flat fields the
-   current static catalogue uses. Note `color` (data) renders as "Colour" (copy). */
-var GARMENT_ROWS = [
-  ['fabric', 'Fabric'],
-  ['pieces', 'Pieces'],
-  ['color',  'Colour'],
-  ['made',   'Made'],
-  ['care',   'Care']
-];
-
-/* The static catalogue carries no `made` or `care`, so these stand in to keep
-   today's product pages unchanged. A product that supplies the field — even as
-   an empty string — overrides them, so real blank data omits the row. Delete
-   this once every product carries its own garment details. */
-var LEGACY_GARMENT = {
-  made: 'Lahore, by hand',
-  care: 'Dry clean only. Store folded in muslin.'
-};
-
-function blank(v) { return v === null || v === undefined || String(v).trim() === ''; }
-
-/* [label, value] pairs for the rows worth showing. Blank values are dropped
-   entirely rather than rendered as a labelled row with nothing beside it.
-
-   A product carrying `garment_details` is taken at its word — no flat-field or
-   legacy fallback is consulted, so a field the app left blank stays blank. The
-   fallbacks apply only to the older flat shape the static catalogue still uses. */
-function garmentDetails(p) {
-  var contract = p.garment_details;
-  var src = contract || {};
-  return GARMENT_ROWS.map(function (row) {
-    var key = row[0];
-    var v = src[key];
-    if (!contract) {
-      if (v === undefined) v = (key === 'color') ? p.colour : p[key];
-      if (v === undefined) v = LEGACY_GARMENT[key];
-    }
-    return [row[1], v];
-  }).filter(function (r) { return !blank(r[1]); });
 }
 
 /* ---------- cards ---------- */
 var CARD_SIZES = '(max-width:640px) 92vw, (max-width:1100px) 44vw, 300px';
 
 function cardHTML(p, small) {
-  return '<a class="card" href="#/product/' + esc(p.id) + '">' +
-    '<div class="shot">' + imgHTML(p.image, p.name, CARD_SIZES, 'loading="lazy" decoding="async"') + '</div>' +
+  return '<a class="card" href="#/product/' + esc(p.slug) + '">' +
+    '<div class="shot">' + imgHTML(p.images[0], CARD_SIZES, 'loading="lazy" decoding="async"') + '</div>' +
     '<div class="meta"><p class="name">' + esc(p.name) + '</p><p class="price">' + esc(p.price) + '</p>' +
-    (small ? '' : '<p class="status"><span class="dot" style="background:' + DOT[p.type] + '"></span>' + esc(p.status) + '</p>') +
+    (small ? '' : '<p class="status"><span class="dot" style="background:' + esc(p.dot) + '"></span>' + esc(p.availabilityLabel) + '</p>') +
     '</div></a>';
 }
 
+/* 'both' belongs in both lists, so the filters test what a piece can be rather
+   than sorting it into one bucket. */
+function matchesFilter(p, filter) {
+  if (filter === 'all') return true;
+  if (filter === 'ready') return p.availability === 'ready_now' || p.availability === 'both';
+  return p.availability === 'made_to_order' || p.availability === 'both';
+}
+
+/* Which piece the home hero photograph shows. The caption is read from the
+   catalogue rather than written into the markup, so it cannot contradict the
+   product page or outlive the piece. The photograph itself is still in
+   index.html — see the comment there. */
+var HERO_SLUG = 'mehr';
+
+function renderHeroTag() {
+  var tag = byId('hero-tag');
+  if (!tag) return;
+  var p = findProductBySlug(HERO_SLUG);
+  tag.classList.toggle('hidden', !p);
+  if (!p) return;
+  byId('hero-name').textContent = p.name;
+  byId('hero-status').textContent = p.availabilityLabel;
+}
+
 function renderGrids() {
+  renderHeroTag();
   byId('featured-grid').innerHTML = PRODUCTS.slice(0, 4).map(function (p) { return cardHTML(p); }).join('');
-  var shown = state.filter === 'all' ? PRODUCTS
-    : PRODUCTS.filter(function (p) { return state.filter === 'ready' ? p.type === 'ready' : p.type !== 'ready'; });
+  var shown = PRODUCTS.filter(function (p) { return matchesFilter(p, state.filter); });
   byId('collection-grid').innerHTML = shown.map(function (p) { return cardHTML(p); }).join('');
   byId('collection-count').textContent =
     catalogue.status === 'loading' ? 'Loading the collection…'
@@ -186,7 +417,7 @@ function renderGrids() {
 
 /* ---------- product ---------- */
 function renderProduct() {
-  var p = findProduct(state.pid);
+  var p = findProductBySlug(state.slug);
 
   /* The product may be unknown because the catalogue has not arrived yet, or
      because it genuinely is not there. Those read very differently to a
@@ -210,14 +441,14 @@ function renderProduct() {
   also.classList.remove('hidden');
 
   var others = PRODUCTS.filter(function (x) { return x.id !== p.id; });
-  var shots = shotsFor(p);
+  var shots = p.images;
   if (state.shot >= shots.length) state.shot = 0;
 
   var hero = byId('pdp-hero');
-  hero.src = shots[state.shot].src;
-  hero.alt = shots[state.shot].alt;
-  var heroSet = IMG_SRCSET[shots[state.shot].src];
-  if (heroSet) { hero.srcset = heroSet; hero.sizes = '(max-width:900px) 100vw, 46vw'; }
+  var shot = shots[state.shot];
+  hero.src = shot.src;
+  hero.alt = shot.alt;
+  if (shot.srcset) { hero.srcset = shot.srcset; hero.sizes = '(max-width:900px) 100vw, 46vw'; }
   else { hero.removeAttribute('srcset'); hero.removeAttribute('sizes'); }
 
   /* One photograph needs no thumbnail strip. Hiding the container rather than
@@ -227,28 +458,32 @@ function renderProduct() {
   thumbs.classList.toggle('hidden', shots.length < 2);
   thumbs.innerHTML = shots.length < 2 ? '' : shots.map(function (s, i) {
     return '<button data-shot="' + i + '" aria-pressed="' + (state.shot === i) + '" aria-label="View ' + (i + 1) + '">' +
-      imgHTML(s.src, s.alt, '(max-width:900px) 24vw, 130px',
+      imgHTML(s, '(max-width:900px) 24vw, 130px',
         'loading="lazy" decoding="async" style="object-position:' + (i === 0 ? '50% 15%' : '50% 30%') + '"') +
       '</button>';
   }).join('');
 
   byId('pdp-name').textContent = p.name;
   byId('pdp-price').textContent = p.price;
-  byId('pdp-status').textContent = p.status;
-  byId('pdp-dot').style.background = DOT[p.type];
+  byId('pdp-status').textContent = p.availabilityLabel;
+  byId('pdp-dot').style.background = p.dot;
   byId('pdp-desc').textContent = p.description;
-  byId('pdp-delivery').textContent = p.delivery;
 
-  byId('pdp-sizes').innerHTML = SIZES.map(function (s) {
+  /* No fulfilment note published means no line — an empty <p> would still take
+     its place in the flex column and leave a gap under the button. */
+  var deliveryEl = byId('pdp-delivery');
+  deliveryEl.textContent = p.delivery;
+  deliveryEl.classList.toggle('hidden', blank(p.delivery));
+
+  byId('pdp-sizes').innerHTML = p.sizes.map(function (s) {
     return '<button data-size="' + esc(s) + '" aria-pressed="' + (state.size === s) + '">' + esc(s) + '</button>';
   }).join('');
 
   /* Hiding the block when nothing survives also removes its top rule, which
      would otherwise sit under the delivery note as an unexplained hairline. */
-  var specs = garmentDetails(p);
   var specsEl = byId('pdp-specs');
-  specsEl.classList.toggle('hidden', specs.length === 0);
-  specsEl.innerHTML = specs.map(function (r) {
+  specsEl.classList.toggle('hidden', p.details.length === 0);
+  specsEl.innerHTML = p.details.map(function (r) {
     return '<div><p class="k">' + esc(r[0]) + '</p><p class="v">' + esc(r[1]) + '</p></div>';
   }).join('');
 
@@ -268,9 +503,9 @@ function saveBag() {
   try { localStorage.setItem(BAG_KEY, JSON.stringify(state.bag)); } catch (e) { /* private mode */ }
 }
 
-/* Only the id and the chosen size are persisted. Everything a row displays is
-   read from the catalogue at render time, so a saved inquiry can never show a
-   stale name or price.
+/* Only the product id and the chosen size are persisted — never a copy of the
+   product. Everything a row displays is read from the catalogue at render
+   time, so a saved inquiry can never show a stale name, price or photograph.
 
    Loading deliberately does NOT check ids against PRODUCTS. It used to, which
    meant that if the catalogue were ever momentarily empty — precisely what
@@ -293,14 +528,14 @@ function loadBag() {
    removable — it is never dropped on the visitor's behalf. Which message it
    carries depends on whether the catalogue has finished loading. */
 function bagRowHTML(b, i) {
-  var p = findProduct(b.id);
+  var p = findBagProduct(b.id);
   var name = p ? p.name : (catalogue.status === 'ready' ? 'No longer available' : 'Loading…');
   var line = (p ? esc(p.price) + ' · ' : '') + 'Size ' + esc(b.size);
   return '<div class="bagrow"><div class="thumb">' +
-    (p ? imgHTML(p.image, p.name, '92px', 'loading="lazy" decoding="async"') : '') + '</div>' +
+    (p ? imgHTML(p.images[0], '92px', 'loading="lazy" decoding="async"') : '') + '</div>' +
     '<div class="info"><p class="name">' + esc(name) + '</p>' +
     '<p class="price">' + line + '</p>' +
-    '<p class="status" style="margin-top:2px">' + esc(p ? p.status : '') + '</p></div>' +
+    '<p class="status" style="margin-top:2px">' + esc(p ? p.availabilityLabel : '') + '</p></div>' +
     '<button class="remove" data-remove="' + i + '" aria-label="Remove ' + esc(name) + ' from your inquiry">Remove</button></div>';
 }
 
@@ -322,7 +557,8 @@ function renderBag() {
 
 /* Everything the atelier needs to answer an inquiry. Kept in one place so that
    whatever we point it at later — Supabase, WhatsApp, email — reads the same
-   shape. See the README. */
+   shape. The id identifies the piece; the slug is included only so a human
+   reading the record can find the page. See the README. */
 function inquiryPayload(form) {
   return {
     submittedAt: new Date().toISOString(),
@@ -331,8 +567,15 @@ function inquiryPayload(form) {
     email: form.email.value.trim(),
     note: form.note.value.trim(),
     items: state.bag.map(function (b) {
-      var p = findProduct(b.id);
-      return { id: b.id, name: p ? p.name : null, size: b.size, price: p ? p.price : null };
+      var p = findBagProduct(b.id);
+      return {
+        id: p ? p.id : b.id,
+        slug: p ? p.slug : null,
+        sku: p ? p.sku : null,
+        name: p ? p.name : null,
+        size: b.size,
+        price: p ? p.price : null
+      };
     })
   };
 }
@@ -352,7 +595,7 @@ function route() {
   if (hash !== 'inquiry') state.sent = false;
 
   if (hash.indexOf('product/') === 0) {
-    state.pid = hash.slice(8);
+    state.slug = decodeURIComponent(hash.slice(8));
     state.size = null; state.shot = 0;
     renderProduct(); show('product'); window.scrollTo(0, 0); return;
   }
@@ -395,9 +638,9 @@ document.addEventListener('click', function (e) {
   if (rm) { state.bag.splice(Number(rm.dataset.remove), 1); saveBag(); renderBag(); return; }
 
   if (e.target.closest('#pdp-add')) {
-    var p = findProduct(state.pid);
+    var p = findProductBySlug(state.slug);
     if (!p || !state.size || state.bag.some(function (b) { return b.id === p.id; })) return;
-    state.bag.push({ id: p.id, size: state.size });
+    state.bag.push({ id: p.id, size: state.size });   /* identity is the id, never the slug */
     saveBag(); renderProduct(); renderBag();
   }
 });
