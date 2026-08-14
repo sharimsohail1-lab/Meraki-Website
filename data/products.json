@@ -1,0 +1,360 @@
+{
+  "products": [
+    {
+      "id": "0f7a1c94-3d21-4a6e-9b30-71c5e8a10001",
+      "slug": "noor",
+      "sku": "MBS-NOOR-01",
+      "name": "NOOR",
+      "description": "A chartreuse silk-cotton kurta with hand-appliquéd blooms and cutwork scallops at the cuff and hem.",
+      "price": 325,
+      "currency": "USD",
+      "collection_names": [
+        "The Roselle Collection"
+      ],
+      "availability": "made_to_order",
+      "sizes": [
+        "38",
+        "40",
+        "42",
+        "44",
+        "46",
+        "Other / Custom"
+      ],
+      "garment_details": {
+        "fabric": "Silk-cotton, hand embroidered",
+        "pieces": "Kurta, straight trouser",
+        "color": "Chartreuse / rose",
+        "made": "Lahore, by hand",
+        "care": "Dry clean only. Store folded in muslin."
+      },
+      "images": [
+        {
+          "src": "img/p1.webp",
+          "role": "model",
+          "sort_order": 0,
+          "alt": null,
+          "width": 1400,
+          "height": 2508,
+          "is_primary": true,
+          "variants": {
+            "560": "img/sm/p1.webp",
+            "960": "img/md/p1.webp",
+            "1400": "img/p1.webp"
+          }
+        }
+      ],
+      "published_at": "2026-08-01T00:00:00.000Z"
+    },
+    {
+      "id": "0f7a1c94-3d21-4a6e-9b30-71c5e8a10002",
+      "slug": "sahar",
+      "sku": "MBS-SAHAR-01",
+      "name": "SAHAR",
+      "description": "An ivory crepe front-open jacket, bordered in resham-embroidered bird and vine work.",
+      "price": 480,
+      "currency": "USD",
+      "collection_names": [
+        "The Roselle Collection"
+      ],
+      "availability": "ready_now",
+      "sizes": [
+        "38",
+        "40",
+        "42",
+        "44",
+        "46",
+        "Other / Custom"
+      ],
+      "garment_details": {
+        "fabric": "Crepe, resham thread work",
+        "pieces": "Jacket, inner slip, trouser",
+        "color": "Ivory / crimson",
+        "made": "Lahore, by hand",
+        "care": "Dry clean only. Store folded in muslin."
+      },
+      "images": [
+        {
+          "src": "img/p2.webp",
+          "role": "model",
+          "sort_order": 0,
+          "alt": null,
+          "width": 938,
+          "height": 1677,
+          "is_primary": true,
+          "variants": {
+            "560": "img/sm/p2.webp",
+            "938": "img/p2.webp"
+          }
+        }
+      ],
+      "published_at": "2026-08-01T00:00:00.000Z"
+    },
+    {
+      "id": "0f7a1c94-3d21-4a6e-9b30-71c5e8a10003",
+      "slug": "sabeen",
+      "sku": "MBS-SABEEN-01",
+      "name": "SABEEN",
+      "description": "A fuchsia cape-sleeve top with scalloped pearl trim, cut wide and worn with a fluid palazzo.",
+      "price": 295,
+      "currency": "USD",
+      "collection_names": [
+        "The Roselle Collection"
+      ],
+      "availability": "ready_now",
+      "sizes": [
+        "38",
+        "40",
+        "42",
+        "44",
+        "46",
+        "Other / Custom"
+      ],
+      "garment_details": {
+        "fabric": "Silk twill, pearl detailing",
+        "pieces": "Cape top, palazzo",
+        "color": "Fuchsia",
+        "made": "Lahore, by hand",
+        "care": "Dry clean only. Store folded in muslin."
+      },
+      "images": [
+        {
+          "src": "img/p3.webp",
+          "role": "model",
+          "sort_order": 0,
+          "alt": null,
+          "width": 938,
+          "height": 1677,
+          "is_primary": true,
+          "variants": {
+            "560": "img/sm/p3.webp",
+            "938": "img/p3.webp"
+          }
+        }
+      ],
+      "published_at": "2026-08-01T00:00:00.000Z"
+    },
+    {
+      "id": "0f7a1c94-3d21-4a6e-9b30-71c5e8a10004",
+      "slug": "gulnaar",
+      "sku": "MBS-GULNAAR-01",
+      "name": "GULNAAR",
+      "description": "A hand-painted floral silk in peach and coral, finished with a lace-edged organza dupatta.",
+      "price": 340,
+      "currency": "USD",
+      "collection_names": [
+        "The Roselle Collection"
+      ],
+      "availability": "made_to_order",
+      "sizes": [
+        "38",
+        "40",
+        "42",
+        "44",
+        "46",
+        "Other / Custom"
+      ],
+      "garment_details": {
+        "fabric": "Printed silk, organza",
+        "pieces": "Kurta, trouser, dupatta",
+        "color": "Peach / coral",
+        "made": "Lahore, by hand",
+        "care": "Dry clean only. Store folded in muslin."
+      },
+      "images": [
+        {
+          "src": "img/p4.webp",
+          "role": "model",
+          "sort_order": 0,
+          "alt": null,
+          "width": 1400,
+          "height": 2508,
+          "is_primary": true,
+          "variants": {
+            "560": "img/sm/p4.webp",
+            "960": "img/md/p4.webp",
+            "1400": "img/p4.webp"
+          }
+        }
+      ],
+      "published_at": "2026-08-01T00:00:00.000Z"
+    },
+    {
+      "id": "0f7a1c94-3d21-4a6e-9b30-71c5e8a10005",
+      "slug": "mehr",
+      "sku": "MBS-MEHR-01",
+      "name": "MEHR",
+      "description": "Rose pink silk with gota and zardozi borders, worn with a saffron chiffon dupatta.",
+      "price": 520,
+      "currency": "USD",
+      "collection_names": [
+        "The Roselle Collection"
+      ],
+      "availability": "ready_now",
+      "sizes": [
+        "38",
+        "40",
+        "42",
+        "44",
+        "46",
+        "Other / Custom"
+      ],
+      "garment_details": {
+        "fabric": "Silk, zardozi and gota work",
+        "pieces": "Kurta, trouser, dupatta",
+        "color": "Rose / saffron",
+        "made": "Lahore, by hand",
+        "care": "Dry clean only. Store folded in muslin."
+      },
+      "images": [
+        {
+          "src": "img/p5.webp",
+          "role": "model",
+          "sort_order": 0,
+          "alt": null,
+          "width": 1400,
+          "height": 2508,
+          "is_primary": true,
+          "variants": {
+            "560": "img/sm/p5.webp",
+            "960": "img/md/p5.webp",
+            "1400": "img/p5.webp"
+          }
+        }
+      ],
+      "published_at": "2026-08-01T00:00:00.000Z"
+    },
+    {
+      "id": "0f7a1c94-3d21-4a6e-9b30-71c5e8a10006",
+      "slug": "ayla",
+      "sku": "MBS-AYLA-01",
+      "name": "AYLA",
+      "description": "A magenta silk shirt with scattered pearl motifs and an ombré chiffon dupatta.",
+      "price": 310,
+      "currency": "USD",
+      "collection_names": [
+        "The Roselle Collection"
+      ],
+      "availability": "ready_now",
+      "sizes": [
+        "38",
+        "40",
+        "42",
+        "44",
+        "46",
+        "Other / Custom"
+      ],
+      "garment_details": {
+        "fabric": "Silk, pearl hand work",
+        "pieces": "Shirt, trouser, ombré dupatta",
+        "color": "Magenta / blush",
+        "made": "Lahore, by hand",
+        "care": "Dry clean only. Store folded in muslin."
+      },
+      "images": [
+        {
+          "src": "img/p6.webp",
+          "role": "model",
+          "sort_order": 0,
+          "alt": null,
+          "width": 1400,
+          "height": 2508,
+          "is_primary": true,
+          "variants": {
+            "560": "img/sm/p6.webp",
+            "960": "img/md/p6.webp",
+            "1400": "img/p6.webp"
+          }
+        }
+      ],
+      "published_at": "2026-08-01T00:00:00.000Z"
+    },
+    {
+      "id": "0f7a1c94-3d21-4a6e-9b30-71c5e8a10007",
+      "slug": "roselle",
+      "sku": "MBS-ROSELLE-01",
+      "name": "ROSELLE",
+      "description": "Deep indigo raw silk with a single embroidered bird-and-blossom panel travelling the front hem.",
+      "price": 395,
+      "currency": "USD",
+      "collection_names": [
+        "The Roselle Collection"
+      ],
+      "availability": "made_to_order",
+      "sizes": [
+        "38",
+        "40",
+        "42",
+        "44",
+        "46",
+        "Other / Custom"
+      ],
+      "garment_details": {
+        "fabric": "Raw silk, thread embroidery",
+        "pieces": "Kurta, trouser",
+        "color": "Indigo / multi",
+        "made": "Lahore, by hand",
+        "care": "Dry clean only. Store folded in muslin."
+      },
+      "images": [
+        {
+          "src": "img/p7.webp",
+          "role": "model",
+          "sort_order": 0,
+          "alt": null,
+          "width": 937,
+          "height": 1678,
+          "is_primary": true,
+          "variants": {
+            "560": "img/sm/p7.webp",
+            "937": "img/p7.webp"
+          }
+        }
+      ],
+      "published_at": "2026-08-01T00:00:00.000Z"
+    },
+    {
+      "id": "0f7a1c94-3d21-4a6e-9b30-71c5e8a10008",
+      "slug": "zarin",
+      "sku": "MBS-ZARIN-01",
+      "name": "ZARIN",
+      "description": "Emerald silk-cotton with scalloped floral embroidery and a two-tone chiffon dupatta.",
+      "price": 360,
+      "currency": "USD",
+      "collection_names": [
+        "The Roselle Collection"
+      ],
+      "availability": "ready_now",
+      "sizes": [
+        "38",
+        "40",
+        "42",
+        "44",
+        "46",
+        "Other / Custom"
+      ],
+      "garment_details": {
+        "fabric": "Silk-cotton, thread embroidery",
+        "pieces": "Kurta, trouser, dupatta",
+        "color": "Emerald / pink",
+        "made": "Lahore, by hand",
+        "care": "Dry clean only. Store folded in muslin."
+      },
+      "images": [
+        {
+          "src": "img/p8.webp",
+          "role": "model",
+          "sort_order": 0,
+          "alt": null,
+          "width": 941,
+          "height": 1672,
+          "is_primary": true,
+          "variants": {
+            "560": "img/sm/p8.webp",
+            "941": "img/p8.webp"
+          }
+        }
+      ],
+      "published_at": "2026-08-01T00:00:00.000Z"
+    }
+  ]
+}
