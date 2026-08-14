@@ -139,6 +139,10 @@
 <!-- ============ PRODUCT ============ -->
 <div class="view hidden pagepad" id="view-product" style="padding-top:clamp(20px,3vw,34px)">
   <a class="back" href="#/collection">← Collection</a>
+  <!-- Shown instead of the product when the catalogue is still loading, failed
+       to load, or genuinely has no such piece. Uses .subtle so it matches the
+       collection count line rather than introducing new styling. -->
+  <p class="subtle hidden" id="pdp-state"></p>
   <div class="pdp">
     <div class="gallery">
       <!-- No src here on purpose: this view is hidden on load and script.js sets
