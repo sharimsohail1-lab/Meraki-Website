@@ -59,9 +59,32 @@ var IMG_SRCSET = {
 
 var state = { filter:'all', pid:'noor', size:null, shot:0, bag:[], sent:false };
 
+/* Is the catalogue usable yet? 'loading' | 'ready' | 'error'.
+
+   The static PRODUCTS literal above is available the moment this file parses,
+   so we start at 'ready' and nothing about today's rendering is delayed. When
+   PRODUCTS later comes from a fetch, drive it through setCatalogueState()
+   instead — the views already read this flag and will do the right thing. */
+var catalogue = { status: 'ready', error: null };
+
+/* Deliberately holds no product data of its own: the catalogue lives in
+   PRODUCTS and response caching belongs to the CDN, not to the page. */
+function setCatalogueState(status, error) {
+  catalogue.status = status;
+  catalogue.error = error || null;
+  renderGrids();
+  renderBag();
+  route();   /* re-resolve wherever the visitor already is, without a refresh */
+}
+
 var $ = function (s) { return document.querySelector(s); };
 var byId = function (id) { return document.getElementById(id); };
-var find = function (id) { return PRODUCTS.filter(function (p) { return p.id === id; })[0] || PRODUCTS[0]; };
+
+/* Null when the id is unknown — including while the catalogue is still empty.
+   Callers must handle null rather than assuming a product came back. */
+var findProduct = function (id) {
+  return PRODUCTS.filter(function (p) { return p.id === id; })[0] || null;
+};
 
 /* Escape anything that ends up inside an HTML string below, so an apostrophe or
    an ampersand in a product name can never break the markup. */
@@ -94,6 +117,48 @@ function shotsFor(p) {
   }).filter(function (shot) { return !!shot.src; });
 }
 
+/* The garment-detail rows, in display order. Keys are read from the product's
+   `garment_details` object when it has one, falling back to the flat fields the
+   current static catalogue uses. Note `color` (data) renders as "Colour" (copy). */
+var GARMENT_ROWS = [
+  ['fabric', 'Fabric'],
+  ['pieces', 'Pieces'],
+  ['color',  'Colour'],
+  ['made',   'Made'],
+  ['care',   'Care']
+];
+
+/* The static catalogue carries no `made` or `care`, so these stand in to keep
+   today's product pages unchanged. A product that supplies the field — even as
+   an empty string — overrides them, so real blank data omits the row. Delete
+   this once every product carries its own garment details. */
+var LEGACY_GARMENT = {
+  made: 'Lahore, by hand',
+  care: 'Dry clean only. Store folded in muslin.'
+};
+
+function blank(v) { return v === null || v === undefined || String(v).trim() === ''; }
+
+/* [label, value] pairs for the rows worth showing. Blank values are dropped
+   entirely rather than rendered as a labelled row with nothing beside it.
+
+   A product carrying `garment_details` is taken at its word — no flat-field or
+   legacy fallback is consulted, so a field the app left blank stays blank. The
+   fallbacks apply only to the older flat shape the static catalogue still uses. */
+function garmentDetails(p) {
+  var contract = p.garment_details;
+  var src = contract || {};
+  return GARMENT_ROWS.map(function (row) {
+    var key = row[0];
+    var v = src[key];
+    if (!contract) {
+      if (v === undefined) v = (key === 'color') ? p.colour : p[key];
+      if (v === undefined) v = LEGACY_GARMENT[key];
+    }
+    return [row[1], v];
+  }).filter(function (r) { return !blank(r[1]); });
+}
+
 /* ---------- cards ---------- */
 var CARD_SIZES = '(max-width:640px) 92vw, (max-width:1100px) 44vw, 300px';
 
@@ -110,7 +175,10 @@ function renderGrids() {
   var shown = state.filter === 'all' ? PRODUCTS
     : PRODUCTS.filter(function (p) { return state.filter === 'ready' ? p.type === 'ready' : p.type !== 'ready'; });
   byId('collection-grid').innerHTML = shown.map(function (p) { return cardHTML(p); }).join('');
-  byId('collection-count').textContent = shown.length + ' pieces · sizes 38–46 and custom';
+  byId('collection-count').textContent =
+    catalogue.status === 'loading' ? 'Loading the collection…'
+    : catalogue.status === 'error' ? 'We couldn’t load the collection. Please try again.'
+    : shown.length + ' pieces · sizes 38–46 and custom';
   Array.prototype.forEach.call(byId('filters').children, function (b) {
     b.setAttribute('aria-pressed', String(b.dataset.filter === state.filter));
   });
@@ -118,7 +186,29 @@ function renderGrids() {
 
 /* ---------- product ---------- */
 function renderProduct() {
-  var p = find(state.pid);
+  var p = findProduct(state.pid);
+
+  /* The product may be unknown because the catalogue has not arrived yet, or
+     because it genuinely is not there. Those read very differently to a
+     visitor, so say which — and never fall through into the render below with
+     nothing to render. */
+  var stateEl = byId('pdp-state');
+  var pdp = $('#view-product .pdp');
+  var also = $('#view-product .also');
+  if (!p) {
+    stateEl.textContent =
+      catalogue.status === 'ready' ? 'We couldn’t find that piece.'
+      : catalogue.status === 'error' ? 'We couldn’t load this piece. Please try again.'
+      : 'Loading…';
+    stateEl.classList.remove('hidden');
+    pdp.classList.add('hidden');
+    also.classList.add('hidden');
+    return;
+  }
+  stateEl.classList.add('hidden');
+  pdp.classList.remove('hidden');
+  also.classList.remove('hidden');
+
   var others = PRODUCTS.filter(function (x) { return x.id !== p.id; });
   var shots = shotsFor(p);
   if (state.shot >= shots.length) state.shot = 0;
@@ -153,9 +243,12 @@ function renderProduct() {
     return '<button data-size="' + esc(s) + '" aria-pressed="' + (state.size === s) + '">' + esc(s) + '</button>';
   }).join('');
 
-  var specs = [['Fabric', p.fabric], ['Pieces', p.pieces], ['Colour', p.colour],
-    ['Made', 'Lahore, by hand'], ['Care', 'Dry clean only. Store folded in muslin.']];
-  byId('pdp-specs').innerHTML = specs.map(function (r) {
+  /* Hiding the block when nothing survives also removes its top rule, which
+     would otherwise sit under the delivery note as an unexplained hairline. */
+  var specs = garmentDetails(p);
+  var specsEl = byId('pdp-specs');
+  specsEl.classList.toggle('hidden', specs.length === 0);
+  specsEl.innerHTML = specs.map(function (r) {
     return '<div><p class="k">' + esc(r[0]) + '</p><p class="v">' + esc(r[1]) + '</p></div>';
   }).join('');
 
@@ -175,20 +268,40 @@ function saveBag() {
   try { localStorage.setItem(BAG_KEY, JSON.stringify(state.bag)); } catch (e) { /* private mode */ }
 }
 
+/* Only the id and the chosen size are persisted. Everything a row displays is
+   read from the catalogue at render time, so a saved inquiry can never show a
+   stale name or price.
+
+   Loading deliberately does NOT check ids against PRODUCTS. It used to, which
+   meant that if the catalogue were ever momentarily empty — precisely what
+   happens while an async fetch is in flight — every entry looked unknown, the
+   bag was emptied, and the next save wrote that empty bag over the customer's
+   inquiry. Persistence and validation are separate concerns: an entry is kept
+   until the visitor removes it. */
 function loadBag() {
   try {
     var raw = localStorage.getItem(BAG_KEY);
     var saved = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(saved)) return;
-    /* Re-read name, price and photograph from PRODUCTS so a saved inquiry never
-       shows stale copy after the catalogue is edited. */
-    state.bag = saved.filter(function (b) {
-      return b && PRODUCTS.some(function (p) { return p.id === b.id; });
-    }).map(function (b) {
-      var p = find(b.id);
-      return { id: p.id, name: p.name, price: p.price, image: p.image, status: p.status, size: b.size };
-    });
+    state.bag = saved
+      .filter(function (b) { return b && b.id; })
+      .map(function (b) { return { id: b.id, size: b.size }; });
   } catch (e) { state.bag = []; }
+}
+
+/* A saved entry whose product is not in the catalogue is still shown and still
+   removable — it is never dropped on the visitor's behalf. Which message it
+   carries depends on whether the catalogue has finished loading. */
+function bagRowHTML(b, i) {
+  var p = findProduct(b.id);
+  var name = p ? p.name : (catalogue.status === 'ready' ? 'No longer available' : 'Loading…');
+  var line = (p ? esc(p.price) + ' · ' : '') + 'Size ' + esc(b.size);
+  return '<div class="bagrow"><div class="thumb">' +
+    (p ? imgHTML(p.image, p.name, '92px', 'loading="lazy" decoding="async"') : '') + '</div>' +
+    '<div class="info"><p class="name">' + esc(name) + '</p>' +
+    '<p class="price">' + line + '</p>' +
+    '<p class="status" style="margin-top:2px">' + esc(p ? p.status : '') + '</p></div>' +
+    '<button class="remove" data-remove="' + i + '" aria-label="Remove ' + esc(name) + ' from your inquiry">Remove</button></div>';
 }
 
 function renderBag() {
@@ -200,14 +313,7 @@ function renderBag() {
   byId('bag-list').innerHTML = n === 0
     ? '<div class="empty"><p class="body">You haven\'t selected any looks yet.</p>' +
       '<button class="pill pill-ghost" style="padding:14px 28px" data-nav="#/collection">Browse the collection</button></div>'
-    : state.bag.map(function (b, i) {
-        return '<div class="bagrow"><div class="thumb">' +
-          imgHTML(b.image, b.name, '92px', 'loading="lazy" decoding="async"') + '</div>' +
-          '<div class="info"><p class="name">' + esc(b.name) + '</p>' +
-          '<p class="price">' + esc(b.price) + ' · Size ' + esc(b.size) + '</p>' +
-          '<p class="status" style="margin-top:2px">' + esc(b.status) + '</p></div>' +
-          '<button class="remove" data-remove="' + i + '" aria-label="Remove ' + esc(b.name) + ' from your inquiry">Remove</button></div>';
-      }).join('');
+    : state.bag.map(function (b, i) { return bagRowHTML(b, i); }).join('');
 
   var submit = byId('inq-submit');
   submit.dataset.ready = String(n > 0);
@@ -225,7 +331,8 @@ function inquiryPayload(form) {
     email: form.email.value.trim(),
     note: form.note.value.trim(),
     items: state.bag.map(function (b) {
-      return { id: b.id, name: b.name, size: b.size, price: b.price };
+      var p = findProduct(b.id);
+      return { id: b.id, name: p ? p.name : null, size: b.size, price: p ? p.price : null };
     })
   };
 }
@@ -288,9 +395,9 @@ document.addEventListener('click', function (e) {
   if (rm) { state.bag.splice(Number(rm.dataset.remove), 1); saveBag(); renderBag(); return; }
 
   if (e.target.closest('#pdp-add')) {
-    var p = find(state.pid);
-    if (!state.size || state.bag.some(function (b) { return b.id === p.id; })) return;
-    state.bag.push({ id: p.id, name: p.name, price: p.price, image: p.image, status: p.status, size: state.size });
+    var p = findProduct(state.pid);
+    if (!p || !state.size || state.bag.some(function (b) { return b.id === p.id; })) return;
+    state.bag.push({ id: p.id, size: state.size });
     saveBag(); renderProduct(); renderBag();
   }
 });
