@@ -183,7 +183,7 @@ var IMG_SRCSET = {
    A per-piece timing promise belongs to the app, in `fulfillment_note`. */
 var AVAILABILITY = {
   ready_now:     { label: 'Ready now',                      dot: '#7A8B5A' },
-  made_to_order: { label: 'Made to order · 4–6 weeks',      dot: '#A6802E' },
+  made_to_order: { label: 'Made to order',                  dot: '#A6802E' },
   both:          { label: 'Ready now · also made to order', dot: '#7A8B5A' }
 };
 
