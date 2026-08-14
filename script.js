@@ -2,158 +2,8 @@
 
    Product data enters through exactly one door: mapProduct(). Everything below
    the mapping layer renders the normalised shape and neither knows nor cares
-   whether a product came from the fixtures in this file, from the published
-   API, or from a test. When the API lands, only the source changes. */
-
-/* ============================================================================
-   FIXTURES
-
-   Temporary stand-ins shaped exactly like the app's published product payload,
-   so the mapping is proven against the approved design before any network call
-   exists. Ids are placeholder UUIDs and deliberately are NOT the slugs: the
-   route uses `slug`, while the inquiry bag and every future database
-   relationship use `id`. The app's published names and slugs become
-   authoritative once the live integration lands.
-   ========================================================================== */
-
-var RAW_PRODUCTS = [
-  {
-    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10001',
-    slug: 'noor', sku: 'MBS-NOOR-01', name: 'NOOR',
-    description: 'A chartreuse silk-cotton kurta with hand-appliquéd blooms and cutwork scallops at the cuff and hem.',
-    price: 325, currency: 'USD',
-    collection_names: ['The Roselle Collection'],
-    availability: 'made_to_order',
-    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
-    garment_details: {
-      fabric: 'Silk-cotton, hand embroidered', pieces: 'Kurta, straight trouser',
-      color: 'Chartreuse / rose', made: 'Lahore, by hand',
-      care: 'Dry clean only. Store folded in muslin.'
-    },
-    images: [{ src: 'img/p1.webp', role: 'model', sort_order: 0, alt: null,
-               width: 1400, height: 2508, is_primary: true }],
-    published_at: '2026-08-01T00:00:00.000Z'
-  },
-  {
-    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10002',
-    slug: 'sahar', sku: 'MBS-SAHAR-01', name: 'SAHAR',
-    description: 'An ivory crepe front-open jacket, bordered in resham-embroidered bird and vine work.',
-    price: 480, currency: 'USD',
-    collection_names: ['The Roselle Collection'],
-    availability: 'ready_now',
-    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
-    garment_details: {
-      fabric: 'Crepe, resham thread work', pieces: 'Jacket, inner slip, trouser',
-      color: 'Ivory / crimson', made: 'Lahore, by hand',
-      care: 'Dry clean only. Store folded in muslin.'
-    },
-    images: [{ src: 'img/p2.webp', role: 'model', sort_order: 0, alt: null,
-               width: 938, height: 1677, is_primary: true }],
-    published_at: '2026-08-01T00:00:00.000Z'
-  },
-  {
-    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10003',
-    slug: 'sabeen', sku: 'MBS-SABEEN-01', name: 'SABEEN',
-    description: 'A fuchsia cape-sleeve top with scalloped pearl trim, cut wide and worn with a fluid palazzo.',
-    price: 295, currency: 'USD',
-    collection_names: ['The Roselle Collection'],
-    availability: 'ready_now',
-    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
-    garment_details: {
-      fabric: 'Silk twill, pearl detailing', pieces: 'Cape top, palazzo',
-      color: 'Fuchsia', made: 'Lahore, by hand',
-      care: 'Dry clean only. Store folded in muslin.'
-    },
-    images: [{ src: 'img/p3.webp', role: 'model', sort_order: 0, alt: null,
-               width: 938, height: 1677, is_primary: true }],
-    published_at: '2026-08-01T00:00:00.000Z'
-  },
-  {
-    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10004',
-    slug: 'gulnaar', sku: 'MBS-GULNAAR-01', name: 'GULNAAR',
-    description: 'A hand-painted floral silk in peach and coral, finished with a lace-edged organza dupatta.',
-    price: 340, currency: 'USD',
-    collection_names: ['The Roselle Collection'],
-    availability: 'made_to_order',
-    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
-    garment_details: {
-      fabric: 'Printed silk, organza', pieces: 'Kurta, trouser, dupatta',
-      color: 'Peach / coral', made: 'Lahore, by hand',
-      care: 'Dry clean only. Store folded in muslin.'
-    },
-    images: [{ src: 'img/p4.webp', role: 'model', sort_order: 0, alt: null,
-               width: 1400, height: 2508, is_primary: true }],
-    published_at: '2026-08-01T00:00:00.000Z'
-  },
-  {
-    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10005',
-    slug: 'mehr', sku: 'MBS-MEHR-01', name: 'MEHR',
-    description: 'Rose pink silk with gota and zardozi borders, worn with a saffron chiffon dupatta.',
-    price: 520, currency: 'USD',
-    collection_names: ['The Roselle Collection'],
-    availability: 'ready_now',
-    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
-    garment_details: {
-      fabric: 'Silk, zardozi and gota work', pieces: 'Kurta, trouser, dupatta',
-      color: 'Rose / saffron', made: 'Lahore, by hand',
-      care: 'Dry clean only. Store folded in muslin.'
-    },
-    images: [{ src: 'img/p5.webp', role: 'model', sort_order: 0, alt: null,
-               width: 1400, height: 2508, is_primary: true }],
-    published_at: '2026-08-01T00:00:00.000Z'
-  },
-  {
-    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10006',
-    slug: 'ayla', sku: 'MBS-AYLA-01', name: 'AYLA',
-    description: 'A magenta silk shirt with scattered pearl motifs and an ombré chiffon dupatta.',
-    price: 310, currency: 'USD',
-    collection_names: ['The Roselle Collection'],
-    availability: 'ready_now',
-    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
-    garment_details: {
-      fabric: 'Silk, pearl hand work', pieces: 'Shirt, trouser, ombré dupatta',
-      color: 'Magenta / blush', made: 'Lahore, by hand',
-      care: 'Dry clean only. Store folded in muslin.'
-    },
-    images: [{ src: 'img/p6.webp', role: 'model', sort_order: 0, alt: null,
-               width: 1400, height: 2508, is_primary: true }],
-    published_at: '2026-08-01T00:00:00.000Z'
-  },
-  {
-    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10007',
-    slug: 'roselle', sku: 'MBS-ROSELLE-01', name: 'ROSELLE',
-    description: 'Deep indigo raw silk with a single embroidered bird-and-blossom panel travelling the front hem.',
-    price: 395, currency: 'USD',
-    collection_names: ['The Roselle Collection'],
-    availability: 'made_to_order',
-    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
-    garment_details: {
-      fabric: 'Raw silk, thread embroidery', pieces: 'Kurta, trouser',
-      color: 'Indigo / multi', made: 'Lahore, by hand',
-      care: 'Dry clean only. Store folded in muslin.'
-    },
-    images: [{ src: 'img/p7.webp', role: 'model', sort_order: 0, alt: null,
-               width: 937, height: 1678, is_primary: true }],
-    published_at: '2026-08-01T00:00:00.000Z'
-  },
-  {
-    id: '0f7a1c94-3d21-4a6e-9b30-71c5e8a10008',
-    slug: 'zarin', sku: 'MBS-ZARIN-01', name: 'ZARIN',
-    description: 'Emerald silk-cotton with scalloped floral embroidery and a two-tone chiffon dupatta.',
-    price: 360, currency: 'USD',
-    collection_names: ['The Roselle Collection'],
-    availability: 'ready_now',
-    sizes: ['38', '40', '42', '44', '46', 'Other / Custom'],
-    garment_details: {
-      fabric: 'Silk-cotton, thread embroidery', pieces: 'Kurta, trouser, dupatta',
-      color: 'Emerald / pink', made: 'Lahore, by hand',
-      care: 'Dry clean only. Store folded in muslin.'
-    },
-    images: [{ src: 'img/p8.webp', role: 'model', sort_order: 0, alt: null,
-               width: 941, height: 1672, is_primary: true }],
-    published_at: '2026-08-01T00:00:00.000Z'
-  }
-];
+   where a product came from — today /api/products, tomorrow the same endpoint
+   backed by Supabase. Only the endpoint's data source changes. */
 
 /* IMG-SRCSET:START — generated by tools/optimize-images.py, do not edit by hand */
 var IMG_SRCSET = {
@@ -302,19 +152,22 @@ function mapProducts(list) {
   return (list || []).map(mapProduct).filter(Boolean);
 }
 
-/* The normalised catalogue every renderer reads. Replaced wholesale when the
-   API lands — nothing below this line changes. */
-var PRODUCTS = mapProducts(RAW_PRODUCTS);
+/* Where the published catalogue is read from. Same origin, so no CORS, no
+   credentials, no cookies. */
+var PRODUCTS_ENDPOINT = '/api/products';
+
+/* The normalised catalogue every renderer reads. Empty until the fetch below
+   resolves; it is mutated in place rather than reassigned so nothing can end up
+   holding a reference to a stale array. */
+var PRODUCTS = [];
 
 var state = { filter:'all', slug:null, size:null, shot:0, bag:[], sent:false };
 
 /* Is the catalogue usable yet? 'loading' | 'ready' | 'error'.
 
-   The fixtures above are available the moment this file parses, so we start at
-   'ready' and nothing about today's rendering is delayed. When products later
-   come from a fetch, drive it through setCatalogueState() instead — the views
-   already read this flag and will do the right thing. */
-var catalogue = { status: 'ready', error: null };
+   Nothing is known until /api/products answers, so the page starts in
+   'loading' and every view renders its waiting state from the outset. */
+var catalogue = { status: 'loading', error: null };
 
 /* Deliberately holds no product data of its own: the catalogue lives in
    PRODUCTS and response caching belongs to the CDN, not to the page. */
@@ -529,7 +382,10 @@ function loadBag() {
    carries depends on whether the catalogue has finished loading. */
 function bagRowHTML(b, i) {
   var p = findBagProduct(b.id);
-  var name = p ? p.name : (catalogue.status === 'ready' ? 'No longer available' : 'Loading…');
+  var name = p ? p.name
+    : catalogue.status === 'ready' ? 'No longer available'
+    : catalogue.status === 'error' ? 'Couldn’t load this piece'
+    : 'Loading…';
   var line = (p ? esc(p.price) + ' · ' : '') + 'Size ' + esc(b.size);
   return '<div class="bagrow"><div class="thumb">' +
     (p ? imgHTML(p.images[0], '92px', 'loading="lazy" decoding="async"') : '') + '</div>' +
@@ -663,8 +519,30 @@ byId('inquiry-form').addEventListener('submit', function (e) {
   route();
 });
 
+/* Fetch the published catalogue and hand every product through the same
+   mapProduct() the fixtures went through. There is deliberately no embedded
+   fallback catalogue: if this fails the storefront says so, rather than
+   quietly serving a copy of the products baked in at deploy time. */
+function loadCatalogue() {
+  setCatalogueState('loading');
+
+  return fetch(PRODUCTS_ENDPOINT, { headers: { Accept: 'application/json' } })
+    .then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function (payload) {
+      var mapped = mapProducts(payload && payload.products);
+      PRODUCTS.length = 0;
+      PRODUCTS.push.apply(PRODUCTS, mapped);
+      setCatalogueState('ready');
+    })
+    .catch(function (err) {
+      PRODUCTS.length = 0;
+      setCatalogueState('error', err);
+    });
+}
+
 window.addEventListener('hashchange', route);
 loadBag();
-renderGrids();
-renderBag();
-route();
+loadCatalogue();
