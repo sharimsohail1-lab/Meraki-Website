@@ -165,4 +165,14 @@ begin
 end $$;
 
 -- The function is reachable only by the service role, same as the tables.
-revoke all on function public.create_website_inquiry(uuid, text, text, text, text, jsonb) from public, anon, authenticated;
+--
+-- The grant is not redundant with the revoke above it. service_role inherits
+-- from public, so revoking from public strips its EXECUTE too; and bypassing
+-- RLS is not the same privilege as being allowed to call a function. Granting
+-- explicitly means this does not depend on whatever the project's default
+-- privileges happen to be.
+revoke all on function public.create_website_inquiry(uuid, text, text, text, text, jsonb)
+  from public, anon, authenticated;
+
+grant execute on function public.create_website_inquiry(uuid, text, text, text, text, jsonb)
+  to service_role;
