@@ -197,6 +197,15 @@ h1.pname{margin:0;font:300 clamp(30px,3.6vw,46px)/1.1 var(--serif);letter-spacin
 .submit[data-ready=true]{background:var(--plum)}
 .submit:hover{opacity:.88}
 .form>p:last-child{margin:0;font:300 11.5px/1.7 var(--sans);color:var(--soft)}
+/* Inline errors. Real sentences beside the field they belong to, so the message
+   never depends on the colour alone; the underline shifts as a second signal
+   for anyone who does read colour. */
+.form .err{font:300 11.5px/1.5 var(--sans);letter-spacing:0;text-transform:none;color:#9B3A2F}
+.form .form-err{margin:0;padding:12px 14px;background:rgba(155,58,47,.07);border-radius:6px}
+.form input[aria-invalid=true],.form textarea[aria-invalid=true]{border-bottom-color:#9B3A2F}
+.form .opt{color:var(--soft);letter-spacing:.1em}
+.submit[data-sending=true]{background:rgba(42,31,34,.28);cursor:progress}
+.submit:disabled{cursor:not-allowed}
 .thanks{min-height:56vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:22px}
 .thanks h1{margin:0;font:300 clamp(32px,4.4vw,56px)/1.15 var(--serif)}
 .thanks p{margin:0;max-width:40ch;font:300 15px/1.9 var(--sans);color:var(--muted)}

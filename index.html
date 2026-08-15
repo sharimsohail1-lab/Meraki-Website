@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Meraki by Saima — Hand-finished Pakistani womenswear</title>
-<meta name="description" content="A small, considered collection of hand-embroidered Pakistani womenswear, made in Lahore and shipped worldwide.">
+<meta name="description" content="A small, considered collection of hand-embroidered Pakistani womenswear, made in Lahore and shipped across the United States.">
 <link rel="canonical" href="https://merakibysaima.com/">
 <meta name="theme-color" content="#FBF8F4">
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Meraki by Saima">
 <meta property="og:title" content="Meraki by Saima — Hand-finished Pakistani womenswear">
-<meta property="og:description" content="A small, considered collection of hand-embroidered Pakistani womenswear, made in Lahore and shipped worldwide.">
+<meta property="og:description" content="A small, considered collection of hand-embroidered Pakistani womenswear, made in Lahore and shipped across the United States.">
 <meta property="og:url" content="https://merakibysaima.com/">
 <meta property="og:image" content="https://merakibysaima.com/img/og.jpg">
 <meta property="og:image:alt" content="A Meraki by Saima look — rose pink silk with a saffron dupatta.">
@@ -54,7 +54,7 @@
 <div class="view" id="view-home">
   <section class="hero">
     <div class="hero-copy">
-      <p class="eyebrow">Pakistani womenswear · Lahore &amp; worldwide</p>
+      <p class="eyebrow">Pakistani womenswear · made in Lahore</p>
       <h1 class="display">Timeless pieces,<br><em>thoughtfully made.</em></h1>
       <p class="lede">A small, considered collection — hand-finished embroidery, fluid silks, and pieces cut to your measurements.</p>
       <div class="btnrow">
@@ -197,13 +197,36 @@
     <p class="subtle" id="bag-label">Nothing selected yet</p>
     <div class="inq-cols">
       <div class="bag" id="bag-list"></div>
+      <!-- novalidate on purpose: the errors below are written by script.js so
+           they read in plain language, sit beside the field they belong to, and
+           survive a failed submit with everything the customer typed intact. -->
       <form class="form" id="inquiry-form" novalidate>
         <p>Tell us a little about you</p>
-        <label>Name<input name="name" placeholder="Your name" autocomplete="name"></label>
-        <label>Phone / WhatsApp<input name="phone" placeholder="+92 300 0000000" autocomplete="tel"></label>
-        <label>Email<input name="email" type="email" placeholder="you@email.com" autocomplete="email"></label>
-        <label>Anything else<textarea name="note" rows="3" placeholder="Occasion, dates, alterations…"></textarea></label>
+        <label>Name
+          <input name="name" placeholder="Your name" autocomplete="name"
+                 maxlength="120" aria-describedby="err-name">
+          <span class="err hidden" id="err-name"></span>
+        </label>
+        <!-- inputmode="tel" brings up the numeric keypad on a phone; the field
+             still accepts brackets, spaces and dashes as they are typed, and
+             the number is normalised on submit rather than fought over. -->
+        <label>Phone
+          <input name="phone" type="tel" inputmode="tel" placeholder="(201) 555-1234"
+                 autocomplete="tel" maxlength="40" aria-describedby="err-phone">
+          <span class="err hidden" id="err-phone"></span>
+        </label>
+        <label>Email <span class="opt">optional</span>
+          <input name="email" type="email" inputmode="email" placeholder="you@email.com"
+                 autocomplete="email" maxlength="254" aria-describedby="err-email">
+          <span class="err hidden" id="err-email"></span>
+        </label>
+        <label>Anything else <span class="opt">optional</span>
+          <textarea name="note" rows="3" maxlength="2000"
+                    placeholder="Occasion, dates, alterations…" aria-describedby="err-note"></textarea>
+          <span class="err hidden" id="err-note"></span>
+        </label>
         <button class="submit" id="inq-submit" type="submit" data-ready="false">Request these looks</button>
+        <p class="err form-err hidden" id="inq-error" role="alert"></p>
         <p>No payment is taken now. We reply personally on WhatsApp or email.</p>
       </form>
     </div>
@@ -221,7 +244,7 @@
   <div class="fcols">
     <div class="fcol">
       <img src="img/logo.png" alt="Meraki by Saima" width="330" height="220" loading="lazy">
-      <p class="blurb">Hand-finished womenswear, made in Lahore. Shipping worldwide.</p>
+      <p class="blurb">Hand-finished womenswear, made in Lahore. Shipping across the U.S.</p>
     </div>
     <div class="fcol">
       <p class="head">Shop</p>
