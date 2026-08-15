@@ -66,12 +66,20 @@
       <img src="img/p5.webp"
            srcset="img/sm/p5.webp 560w, img/md/p5.webp 960w, img/p5.webp 1400w"
            sizes="(max-width:940px) 100vw, 53vw"
-           alt="Meraki look — Mehr, rose pink silk with a saffron chiffon dupatta"
+           alt="A Meraki look — rose pink silk with a saffron chiffon dupatta"
            fetchpriority="high" decoding="async">
-      <!-- Filled from the catalogue by script.js (HERO_SLUG), so it can never
-           drift from what the product page says. Hidden if that piece is not
-           published. The photograph above stays in the markup so the preload
-           scanner can still find it for LCP. -->
+      <!-- The alt describes what is visible in this photograph and names no
+           product on purpose: script.js replaces both the image and the alt
+           when a featured piece is set, and a garment name written here would
+           go on describing a piece that may not be the one on screen — or may
+           no longer be in the catalogue at all.
+
+           The caption below is filled from the catalogue via the featured
+           product in Website Settings, so it cannot contradict the product
+           page. Caption and photograph move together: if the featured piece
+           has no usable image, neither changes and no caption is shown. The
+           photograph stays in the markup so the preload scanner can find it
+           for LCP. -->
       <div class="hero-tag hidden" id="hero-tag">
         <p id="hero-name"></p>
         <p id="hero-status"></p>
@@ -109,7 +117,9 @@
       <div class="steps">
         <div><span>01</span><span>Send an inquiry with the looks you love</span></div>
         <div><span>02</span><span>We confirm sizing, fabric and price over WhatsApp</span></div>
-        <div><span>03</span><span>Your piece is cut, embroidered and shipped in 4–6 weeks</span></div>
+        <!-- The lead time is filled from Website Settings; empty here so a
+             figure Saima has changed in the app can never flash on screen. -->
+        <div><span>03</span><span>Your piece is cut, embroidered and shipped<span class="hidden" id="step-lead-time"></span></span></div>
       </div>
     </div>
     <div class="mto-img">
@@ -162,10 +172,10 @@
         <p class="pstatus"><span class="dot" id="pdp-dot"></span><span id="pdp-status"></span></p>
       </div>
       <p class="desc" id="pdp-desc"></p>
-      <div style="display:flex;flex-direction:column;gap:12px;padding-top:6px">
+      <div style="display:flex;flex-direction:column;gap:12px;padding-top:6px" id="pdp-size-block">
         <div class="sizes-head">
           <p class="label">Size</p>
-          <span class="label">Sizes 38–46 &amp; custom</span>
+          <span class="label" id="pdp-size-note"></span>
         </div>
         <div class="sizes" id="pdp-sizes" role="group" aria-label="Choose a size"></div>
       </div>
@@ -200,7 +210,7 @@
   </div>
   <div class="thanks hidden" id="inq-thanks">
     <h1>Thank you.</h1>
-    <p>Saima will write to you personally within one working day to confirm sizing, fabric and timing.</p>
+    <p id="inq-response-note"></p>
     <button class="pill pill-ghost sm" data-nav="#/collection">Continue browsing</button>
   </div>
 </div>
@@ -219,20 +229,20 @@
       <a href="#/ready">Ready now</a>
       <a href="#/made-to-order">Made to order</a>
     </div>
-    <div class="fcol">
+    <div class="fcol" id="footer-contact">
       <p class="head">Contact</p>
-      <a href="https://wa.me/" target="_blank" rel="noopener">WhatsApp</a>
-      <a href="mailto:hello@merakibysaima.com">hello@merakibysaima.com</a>
-      <a href="https://instagram.com" target="_blank" rel="noopener">Instagram</a>
+      <a id="contact-whatsapp" class="hidden" target="_blank" rel="noopener">WhatsApp</a>
+      <a id="contact-email" class="hidden"></a>
+      <a id="contact-instagram" class="hidden" target="_blank" rel="noopener">Instagram</a>
     </div>
     <div class="fcol">
       <p class="head">Service</p>
-      <p class="line">Made to order · 4–6 weeks</p>
-      <p class="line">Sizes 38 – 46 &amp; custom</p>
-      <p class="line">Lahore, Pakistan</p>
+      <p class="line">Made to order<span class="hidden" id="footer-lead-time"></span></p>
+      <p class="line hidden" id="footer-size-note"></p>
+      <p class="line hidden" id="footer-location"></p>
     </div>
   </div>
-  <p class="copyright">© 2026 Meraki by Saima</p>
+  <p class="copyright">© <span id="copyright-year">2026</span> Meraki by Saima</p>
 </footer>
 
 <script src="script.js"></script>

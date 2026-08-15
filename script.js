@@ -45,9 +45,29 @@ var GARMENT_ROWS = [
   ['care',   'Care']
 ];
 
-/* A size list is offered so the visitor can still start a conversation about a
-   piece whose sizes the app has not published. */
-var CUSTOM_SIZE = 'Other / Custom';
+/* TEMPORARY, for launch. The catalogue carries sizing from several eras — some
+   pieces list S/M, some list 38–46, some list nothing — so offering a size
+   would mean offering a different vocabulary depending on which piece a
+   customer happened to open. Until Ready Now and Made to Order have a sizing
+   model of their own, size is settled in the follow-up conversation instead.
+ *
+ * Presentation only, and deliberately one switch. /api/products keeps
+ * returning `sizes`, mapProduct keeps mapping them, and no stored data is
+ * touched — so re-enabling this is this line, with nothing to migrate.
+ *
+ * Everything that reads it: the PDP size block, the Add to Inquiry button's
+ * requirements, and the places the global size note is shown (a "sizes 38–46"
+ * claim is confusing next to a page that offers no sizes). */
+var SHOW_SIZE_SELECTION = false;
+
+/* Never shown to a customer. The app keeps a custom option for its own use, but
+   the storefront offers only sizes that actually exist — someone needing custom
+   sizing says so in the inquiry note. */
+var HIDDEN_SIZE_LABELS = ['other / custom', 'other', 'custom'];
+
+function isPublicSize(label) {
+  return !blank(label) && HIDDEN_SIZE_LABELS.indexOf(String(label).trim().toLowerCase()) === -1;
+}
 
 function blank(v) { return v === null || v === undefined || String(v).trim() === ''; }
 
@@ -124,7 +144,7 @@ function mapGarmentDetails(details) {
 function mapProduct(raw) {
   if (!raw || blank(raw.id)) return null;
   var avail = AVAILABILITY[raw.availability] || AVAILABILITY.made_to_order;
-  var sizes = (raw.sizes || []).filter(function (s) { return !blank(s); });
+  var sizes = (raw.sizes || []).filter(isPublicSize);
 
   return {
     id: raw.id,
@@ -138,10 +158,14 @@ function mapProduct(raw) {
     availability: raw.availability || 'made_to_order',
     availabilityLabel: avail.label,
     dot: avail.dot,
-    /* Only ever what the app actually says about fulfilment. Absent means the
-       line is not rendered at all — silence rather than a guess. */
-    delivery: blank(raw.fulfillment_note) ? '' : String(raw.fulfillment_note).trim(),
-    sizes: sizes.length ? sizes : [CUSTOM_SIZE],
+    /* The piece's own note, exactly as the app stores it. Kept raw: what the
+       page actually shows is resolved at render time by
+       getEffectiveFulfillment(), because it may depend on a global setting
+       that arrives separately. Nothing is ever written back. */
+    fulfillmentNote: blank(raw.fulfillment_note) ? '' : String(raw.fulfillment_note).trim(),
+    /* May legitimately be empty: the size selector then hides itself and the
+       piece can still be added to an inquiry without one. */
+    sizes: sizes,
     details: mapGarmentDetails(raw.garment_details),
     images: mapImages(raw.images, raw.name || ''),
     publishedAt: raw.published_at || null
@@ -152,9 +176,49 @@ function mapProducts(list) {
   return (list || []).map(mapProduct).filter(Boolean);
 }
 
-/* Where the published catalogue is read from. Same origin, so no CORS, no
-   credentials, no cookies. */
+/* What the page should say about timing for one piece, right now.
+ *
+ * Two sources, and the piece's own note always wins:
+ *
+ *   ready_now      note → the note;  blank → nothing. The global made-to-order
+ *                  lead time is a promise about making a piece, and a piece
+ *                  that already exists is not being made. It must not apply.
+ *   made_to_order  note → the note;  blank → the global lead time
+ *   both           note → the note;  blank → the global lead time
+ *
+ * Blank on both sides means no line at all, never an empty one.
+ *
+ * Presentation only. The global value is read each time it is needed rather
+ * than copied into the product, so changing the lead time in the app changes
+ * every piece that relies on it, with nothing to migrate and nothing to go
+ * stale. It is deliberately not part of the API contract.
+ */
+function getEffectiveFulfillment(product, settings) {
+  if (!product) return '';
+  if (!blank(product.fulfillmentNote)) return String(product.fulfillmentNote).trim();
+  /* Only ready_now is excluded, so an unrecognised availability falls back the
+     same way mapProduct's label does — made to order. */
+  if (product.availability === 'ready_now') return '';
+  var lead = settings && settings.made_to_order_lead_time;
+  return blank(lead) ? '' : String(lead).trim();
+}
+
+/* Where the published catalogue and the operational settings are read from.
+   Same origin, so no CORS, no credentials, no cookies. */
 var PRODUCTS_ENDPOINT = '/api/products';
+var SETTINGS_ENDPOINT = '/api/site-settings';
+
+/* Everything Saima maintains in the app. Blank until the fetch resolves, and
+   blank again if it fails — every consumer hides the line it cannot fill, so a
+   settings outage costs a few footer lines rather than the whole storefront. */
+function blankSettings() {
+  return {
+    featured_product_id: null, whatsapp: null, contact_email: null,
+    instagram_url: null, location: null, made_to_order_lead_time: null,
+    size_service_note: null, inquiry_response_note: null
+  };
+}
+var SETTINGS = blankSettings();
 
 /* The normalised catalogue every renderer reads. Empty until the fetch below
    resolves; it is mutated in place rather than reassigned so nothing can end up
@@ -238,31 +302,107 @@ function matchesFilter(p, filter) {
   return p.availability === 'made_to_order' || p.availability === 'both';
 }
 
-/* Which piece the home hero photograph shows. The caption is read from the
-   catalogue rather than written into the markup, so it cannot contradict the
-   product page or outlive the piece. The photograph itself is still in
-   index.html — see the comment there. */
-var HERO_SLUG = 'mehr';
+/* Which piece the home hero shows is Saima's choice, made in the app and read
+   from Website Settings as a product id. It is resolved against the published
+   catalogue, which is already filtered to published and unarchived — so a
+   featured piece that is retired, archived or unpublished simply stops
+   resolving, and the hero goes back to being a photograph with no caption.
+   There is deliberately no fallback piece: naming a garment Saima did not
+   choose is worse than naming none. */
+function featuredProduct() {
+  return blank(SETTINGS.featured_product_id) ? null : findProduct(SETTINGS.featured_product_id);
+}
 
-function renderHeroTag() {
+/* The editorial photograph exactly as index.html shipped it, captured before
+   anything can overwrite it so the hero can always be put back. Without this
+   the swap is one-way: once a product photograph is in place, a later render
+   that has no product to show leaves the wrong garment on screen. */
+var HERO_EDITORIAL = null;
+
+function heroImg() { return $('.hero-img img'); }
+
+function captureHeroEditorial() {
+  var img = heroImg();
+  if (!img || HERO_EDITORIAL) return;
+  HERO_EDITORIAL = {
+    src: img.getAttribute('src'), srcset: img.getAttribute('srcset'),
+    sizes: img.getAttribute('sizes'), alt: img.getAttribute('alt')
+  };
+}
+
+function setHeroImage(shot) {
+  var img = heroImg();
+  if (!img || !shot || blank(shot.src)) return;
+  if (img.getAttribute('src') === shot.src) return;   /* already right; don't refetch */
+  img.src = shot.src;
+  img.alt = shot.alt || '';
+  if (shot.srcset) { img.srcset = shot.srcset; img.sizes = shot.sizes || '(max-width:940px) 100vw, 53vw'; }
+  else { img.removeAttribute('srcset'); img.removeAttribute('sizes'); }
+}
+
+/* The caption and the photograph move together or not at all.
+ *
+ * Three things could otherwise disagree — the caption, the photograph and the
+ * alt text — and any two of them naming different garments is worse than
+ * showing no caption. So there are exactly two safe states:
+ *
+ *   a featured piece that resolves AND has a photograph → its caption, its
+ *   photograph, its alt
+ *
+ *   anything else → the editorial photograph with its own alt, no caption
+ *
+ * A featured piece with no usable image is not a partial success; it falls
+ * back completely. */
+function renderHero() {
   var tag = byId('hero-tag');
   if (!tag) return;
-  var p = findProductBySlug(HERO_SLUG);
-  tag.classList.toggle('hidden', !p);
-  if (!p) return;
+  captureHeroEditorial();
+
+  var p = featuredProduct();
+  var shot = (p && p.images.length && !blank(p.images[0].src)) ? p.images[0] : null;
+  var safe = !!(p && shot);
+
+  tag.classList.toggle('hidden', !safe);
+
+  if (!safe) {
+    byId('hero-name').textContent = '';
+    byId('hero-status').textContent = '';
+    setHeroImage(HERO_EDITORIAL);
+    return;
+  }
+
   byId('hero-name').textContent = p.name;
   byId('hero-status').textContent = p.availabilityLabel;
+  setHeroImage(shot);
+}
+
+/* Whether the global size note may be shown to a customer at all. It reads
+   "sizes 38–46 and custom" — a promise the storefront cannot currently let
+   anyone act on, so while size selection is hidden the note is hidden with it
+   everywhere rather than reworded into something new. The setting itself is
+   untouched and comes straight back when sizing returns. */
+function sizeServiceNote() {
+  return SHOW_SIZE_SELECTION ? SETTINGS.size_service_note : null;
+}
+
+/* "12 pieces · sizes 38–46 and custom". The size clause is Saima's, from
+   Website Settings — the range the atelier actually offers changes, and a
+   number written into the page here would go on claiming the old one. No note
+   set means no clause. */
+function collectionCount(n) {
+  var note = sizeServiceNote();
+  return n + (n === 1 ? ' piece' : ' pieces') + (blank(note) ? '' : ' · ' + note);
 }
 
 function renderGrids() {
-  renderHeroTag();
+  renderHero();
   byId('featured-grid').innerHTML = PRODUCTS.slice(0, 4).map(function (p) { return cardHTML(p); }).join('');
   var shown = PRODUCTS.filter(function (p) { return matchesFilter(p, state.filter); });
   byId('collection-grid').innerHTML = shown.map(function (p) { return cardHTML(p); }).join('');
   byId('collection-count').textContent =
     catalogue.status === 'loading' ? 'Loading the collection…'
     : catalogue.status === 'error' ? 'We couldn’t load the collection. Please try again.'
-    : shown.length + ' pieces · sizes 38–46 and custom';
+    : collectionCount(shown.length);
   Array.prototype.forEach.call(byId('filters').children, function (b) {
     b.setAttribute('aria-pressed', String(b.dataset.filter === state.filter));
   });
@@ -322,13 +462,26 @@ function renderProduct() {
   byId('pdp-dot').style.background = p.dot;
   byId('pdp-desc').textContent = p.description;
 
-  /* No fulfilment note published means no line — an empty <p> would still take
-     its place in the flex column and leave a gap under the button. */
+  /* Nothing to say about timing means no line — an empty <p> would still take
+     its place in the flex column and leave a gap under the button. The helper
+     returns '' rather than null or undefined, so nothing can reach the page as
+     the word "undefined". */
   var deliveryEl = byId('pdp-delivery');
-  deliveryEl.textContent = p.delivery;
-  deliveryEl.classList.toggle('hidden', blank(p.delivery));
+  var delivery = getEffectiveFulfillment(p, SETTINGS);
+  deliveryEl.textContent = delivery;
+  deliveryEl.classList.toggle('hidden', blank(delivery));
 
-  byId('pdp-sizes').innerHTML = p.sizes.map(function (s) {
+  /* A piece with no published sizes shows no size control at all. Not an empty
+     row, and emphatically not a fabricated "Custom" button — the app decides
+     which sizes exist, and none is a legitimate answer. Such a piece can still
+     be added to an inquiry; sizing is then settled in the conversation.
+
+     While SHOW_SIZE_SELECTION is off the same is true of every piece: the
+     block goes, heading and note with it, and nothing takes its place. The
+     page runs from the description straight to Add to Inquiry. */
+  var offerSizes = SHOW_SIZE_SELECTION && p.sizes.length > 0;
+  byId('pdp-size-block').classList.toggle('hidden', !offerSizes);
+  byId('pdp-sizes').innerHTML = !offerSizes ? '' : p.sizes.map(function (s) {
     return '<button data-size="' + esc(s) + '" aria-pressed="' + (state.size === s) + '">' + esc(s) + '</button>';
   }).join('');
 
@@ -340,10 +493,12 @@ function renderProduct() {
     return '<div><p class="k">' + esc(r[0]) + '</p><p class="v">' + esc(r[1]) + '</p></div>';
   }).join('');
 
+  /* "Select a size" is only an instruction when a size is actually on offer. */
+  var ready = !offerSizes || state.size !== null;
   var inBag = state.bag.some(function (b) { return b.id === p.id; });
   var add = byId('pdp-add');
-  add.dataset.state = inBag ? 'added' : (state.size ? 'ready' : 'idle');
-  add.textContent = inBag ? 'In your inquiry ✓' : (state.size ? 'Add to inquiry' : 'Select a size');
+  add.dataset.state = inBag ? 'added' : (ready ? 'ready' : 'idle');
+  add.textContent = inBag ? 'In your inquiry ✓' : (ready ? 'Add to inquiry' : 'Select a size');
   add.disabled = inBag;
 
   byId('pdp-related').innerHTML = others.slice(0, 4).map(function (x) { return cardHTML(x, true); }).join('');
@@ -386,11 +541,19 @@ function bagRowHTML(b, i) {
     : catalogue.status === 'ready' ? 'No longer available'
     : catalogue.status === 'error' ? 'Couldn’t load this piece'
     : 'Loading…';
-  var line = (p ? esc(p.price) + ' · ' : '') + 'Size ' + esc(b.size);
+  /* Both halves are optional: the price is unknown until the catalogue lands,
+     and the size is genuinely absent for a piece that publishes none. Built
+     from whatever is actually known rather than from a fixed template with
+     holes in it. */
+  var bits = [];
+  if (p && !blank(p.price)) bits.push(esc(p.price));
+  if (!blank(b.size)) bits.push('Size ' + esc(b.size));
+  var line = bits.join(' · ');
+
   return '<div class="bagrow"><div class="thumb">' +
     (p ? imgHTML(p.images[0], '92px', 'loading="lazy" decoding="async"') : '') + '</div>' +
     '<div class="info"><p class="name">' + esc(name) + '</p>' +
-    '<p class="price">' + line + '</p>' +
+    (line ? '<p class="price">' + line + '</p>' : '') +
     '<p class="status" style="margin-top:2px">' + esc(p ? p.availabilityLabel : '') + '</p></div>' +
     '<button class="remove" data-remove="' + i + '" aria-label="Remove ' + esc(name) + ' from your inquiry">Remove</button></div>';
 }
@@ -495,8 +658,11 @@ document.addEventListener('click', function (e) {
 
   if (e.target.closest('#pdp-add')) {
     var p = findProductBySlug(state.slug);
-    if (!p || !state.size || state.bag.some(function (b) { return b.id === p.id; })) return;
-    state.bag.push({ id: p.id, size: state.size });   /* identity is the id, never the slug */
+    if (!p || state.bag.some(function (b) { return b.id === p.id; })) return;
+    /* A size is required only when one was actually offered. */
+    var offered = SHOW_SIZE_SELECTION && p.sizes.length > 0;
+    if (offered && !state.size) return;
+    state.bag.push({ id: p.id, size: offered ? state.size : null });   /* identity is the id, never the slug */
     saveBag(); renderProduct(); renderBag();
   }
 });
@@ -543,6 +709,129 @@ function loadCatalogue() {
     });
 }
 
+/* ---------- website settings ---------- */
+
+/* Fill an element with text, or hide it. Every settings-driven line on the page
+   goes through here, so "Saima has not filled this in" always renders the same
+   way: the line is absent, never an empty label, a dangling separator or a
+   placeholder standing in for a real answer. The prefix is the punctuation that
+   only makes sense once there is something to punctuate. */
+function setSettingLine(id, value, prefix) {
+  var el = byId(id);
+  if (!el) return null;
+  var empty = blank(value);
+  el.textContent = empty ? '' : (prefix || '') + String(value).trim();
+  el.classList.toggle('hidden', empty);
+  return empty ? null : el;
+}
+
+/* The app stores WhatsApp as international digits and renders it as "+digits".
+   wa.me wants the digits alone, so anything a human may have typed around them
+   — plus, spaces, brackets, dashes — is stripped here rather than assumed
+   absent. No digits means no link: a bare https://wa.me/ is a broken promise,
+   not a contact detail. */
+function whatsappHref(value) {
+  var digits = blank(value) ? '' : String(value).replace(/\D+/g, '');
+  return digits ? 'https://wa.me/' + digits : null;
+}
+
+/* Saved as a full profile URL by the app, but a bare handle or a scheme-less
+   host would both otherwise resolve as a relative path on this site. */
+function externalHref(value) {
+  if (blank(value)) return null;
+  var url = String(value).trim();
+  return /^https?:\/\//i.test(url) ? url : 'https://' + url.replace(/^\/+/, '');
+}
+
+function setContactLink(id, href, label) {
+  var el = byId(id);
+  if (!el) return false;
+  if (!href) {
+    el.classList.add('hidden');
+    el.removeAttribute('href');
+    return false;
+  }
+  el.href = href;
+  if (label) el.textContent = label;
+  el.classList.remove('hidden');
+  return true;
+}
+
+/* Everything Saima maintains in the app, written onto the page in one place.
+   Called once at load with blank settings and again when the fetch resolves,
+   so it has to be idempotent in both directions — each branch sets *and*
+   clears, and none of them leaves a stale value behind on failure. */
+function applySettings() {
+  var s = SETTINGS;
+
+  /* Reads "…cut, embroidered and shipped in 4–6 weeks", or just "…and shipped"
+     when no lead time is published. */
+  setSettingLine('step-lead-time', s.made_to_order_lead_time, ' in ');
+  setSettingLine('footer-lead-time', s.made_to_order_lead_time, ' · ');
+  setSettingLine('footer-size-note', sizeServiceNote());
+  setSettingLine('footer-location', s.location);
+  setSettingLine('pdp-size-note', sizeServiceNote());
+  setSettingLine('inq-response-note', s.inquiry_response_note);
+
+  var contacts = [
+    setContactLink('contact-whatsapp', whatsappHref(s.whatsapp), 'WhatsApp'),
+    setContactLink('contact-email', blank(s.contact_email) ? null : 'mailto:' + s.contact_email, s.contact_email),
+    setContactLink('contact-instagram', externalHref(s.instagram_url), 'Instagram')
+  ].filter(Boolean).length;
+
+  /* A "Contact" heading with nothing under it reads as a broken page rather
+     than an unfilled setting, so the column goes with its last link. */
+  var col = byId('footer-contact');
+  if (col) col.classList.toggle('hidden', contacts === 0);
+}
+
+/* Settings are not load-bearing: the catalogue is the storefront, and a
+   settings outage must cost a few optional lines rather than the shop. So the
+   failure path is blank settings, not an error state, and the promise always
+   resolves. */
+function loadSettings() {
+  return fetch(SETTINGS_ENDPOINT, { headers: { Accept: 'application/json' } })
+    .then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function (payload) {
+      var incoming = (payload && payload.settings) || {};
+      var next = blankSettings();
+      Object.keys(next).forEach(function (k) {
+        next[k] = blank(incoming[k]) ? null : String(incoming[k]).trim();
+      });
+      SETTINGS = next;
+    })
+    .catch(function (err) {
+      SETTINGS = blankSettings();
+      if (window.console && console.warn) console.warn('Site settings unavailable:', err);
+    })
+    .then(function () {
+      applySettings();
+      refreshViews();
+    });
+}
+
+/* Re-render what is already on screen without re-running the route. The
+   catalogue and the settings arrive independently and either can land after
+   the visitor has started reading; routing again here would scroll them back
+   to the top of the page mid-sentence. */
+function refreshViews() {
+  renderGrids();
+  if (state.slug) renderProduct();
+  renderBag();
+}
+
+/* Nobody should have to redeploy the site in January. */
+function renderCopyrightYear() {
+  var el = byId('copyright-year');
+  if (el) el.textContent = String(new Date().getFullYear());
+}
+
 window.addEventListener('hashchange', route);
+renderCopyrightYear();
+applySettings();   /* blank until the fetch lands: hides every line it cannot fill */
 loadBag();
 loadCatalogue();
+loadSettings();
