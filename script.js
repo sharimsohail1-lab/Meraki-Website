@@ -45,6 +45,21 @@ var GARMENT_ROWS = [
   ['care',   'Care']
 ];
 
+/* TEMPORARY, for launch. The catalogue carries sizing from several eras — some
+   pieces list S/M, some list 38–46, some list nothing — so offering a size
+   would mean offering a different vocabulary depending on which piece a
+   customer happened to open. Until Ready Now and Made to Order have a sizing
+   model of their own, size is settled in the follow-up conversation instead.
+ *
+ * Presentation only, and deliberately one switch. /api/products keeps
+ * returning `sizes`, mapProduct keeps mapping them, and no stored data is
+ * touched — so re-enabling this is this line, with nothing to migrate.
+ *
+ * Everything that reads it: the PDP size block, the Add to Inquiry button's
+ * requirements, and the places the global size note is shown (a "sizes 38–46"
+ * claim is confusing next to a page that offers no sizes). */
+var SHOW_SIZE_SELECTION = false;
+
 /* Never shown to a customer. The app keeps a custom option for its own use, but
    the storefront offers only sizes that actually exist — someone needing custom
    sizing says so in the inquiry note. */
@@ -361,12 +376,21 @@ function renderHero() {
   setHeroImage(shot);
 }
 
+/* Whether the global size note may be shown to a customer at all. It reads
+   "sizes 38–46 and custom" — a promise the storefront cannot currently let
+   anyone act on, so while size selection is hidden the note is hidden with it
+   everywhere rather than reworded into something new. The setting itself is
+   untouched and comes straight back when sizing returns. */
+function sizeServiceNote() {
+  return SHOW_SIZE_SELECTION ? SETTINGS.size_service_note : null;
+}
+
 /* "12 pieces · sizes 38–46 and custom". The size clause is Saima's, from
    Website Settings — the range the atelier actually offers changes, and a
    number written into the page here would go on claiming the old one. No note
    set means no clause. */
 function collectionCount(n) {
-  var note = SETTINGS.size_service_note;
+  var note = sizeServiceNote();
   return n + (n === 1 ? ' piece' : ' pieces') + (blank(note) ? '' : ' · ' + note);
 }
 
@@ -450,10 +474,14 @@ function renderProduct() {
   /* A piece with no published sizes shows no size control at all. Not an empty
      row, and emphatically not a fabricated "Custom" button — the app decides
      which sizes exist, and none is a legitimate answer. Such a piece can still
-     be added to an inquiry; sizing is then settled in the conversation. */
-  var sizeBlock = byId('pdp-size-block');
-  sizeBlock.classList.toggle('hidden', p.sizes.length === 0);
-  byId('pdp-sizes').innerHTML = p.sizes.map(function (s) {
+     be added to an inquiry; sizing is then settled in the conversation.
+
+     While SHOW_SIZE_SELECTION is off the same is true of every piece: the
+     block goes, heading and note with it, and nothing takes its place. The
+     page runs from the description straight to Add to Inquiry. */
+  var offerSizes = SHOW_SIZE_SELECTION && p.sizes.length > 0;
+  byId('pdp-size-block').classList.toggle('hidden', !offerSizes);
+  byId('pdp-sizes').innerHTML = !offerSizes ? '' : p.sizes.map(function (s) {
     return '<button data-size="' + esc(s) + '" aria-pressed="' + (state.size === s) + '">' + esc(s) + '</button>';
   }).join('');
 
@@ -465,8 +493,8 @@ function renderProduct() {
     return '<div><p class="k">' + esc(r[0]) + '</p><p class="v">' + esc(r[1]) + '</p></div>';
   }).join('');
 
-  /* "Select a size" is only an instruction when there is a size to select. */
-  var ready = state.size !== null || p.sizes.length === 0;
+  /* "Select a size" is only an instruction when a size is actually on offer. */
+  var ready = !offerSizes || state.size !== null;
   var inBag = state.bag.some(function (b) { return b.id === p.id; });
   var add = byId('pdp-add');
   add.dataset.state = inBag ? 'added' : (ready ? 'ready' : 'idle');
@@ -631,9 +659,10 @@ document.addEventListener('click', function (e) {
   if (e.target.closest('#pdp-add')) {
     var p = findProductBySlug(state.slug);
     if (!p || state.bag.some(function (b) { return b.id === p.id; })) return;
-    /* A size is required only when the piece publishes any. */
-    if (p.sizes.length && !state.size) return;
-    state.bag.push({ id: p.id, size: p.sizes.length ? state.size : null });   /* identity is the id, never the slug */
+    /* A size is required only when one was actually offered. */
+    var offered = SHOW_SIZE_SELECTION && p.sizes.length > 0;
+    if (offered && !state.size) return;
+    state.bag.push({ id: p.id, size: offered ? state.size : null });   /* identity is the id, never the slug */
     saveBag(); renderProduct(); renderBag();
   }
 });
@@ -739,9 +768,9 @@ function applySettings() {
      when no lead time is published. */
   setSettingLine('step-lead-time', s.made_to_order_lead_time, ' in ');
   setSettingLine('footer-lead-time', s.made_to_order_lead_time, ' · ');
-  setSettingLine('footer-size-note', s.size_service_note);
+  setSettingLine('footer-size-note', sizeServiceNote());
   setSettingLine('footer-location', s.location);
-  setSettingLine('pdp-size-note', s.size_service_note);
+  setSettingLine('pdp-size-note', sizeServiceNote());
   setSettingLine('inq-response-note', s.inquiry_response_note);
 
   var contacts = [
