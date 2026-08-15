@@ -78,17 +78,18 @@
          whole block is the link, so the film and its caption go to the same
          place a visitor would expect.
 
-         The signed Storage URL is used verbatim and expires in about a year;
-         only the ampersands are entity-escaped, which is what an HTML
-         attribute requires and what the browser undoes on parse. The poster is
-         the photograph that was already here, so there is no blank rectangle
-         while the film loads and no new asset to ship. -->
+         The signed Storage URL is written verbatim and expires in about a
+         year. It carries no ampersands, so nothing needs entity-escaping, and
+         the %20 in the filename is already percent-encoding — re-encoding or
+         decoding it would address a different object. The poster is the
+         photograph that was already here, so there is no blank rectangle while
+         the film loads and no new asset to ship. -->
     <a class="hero-img hero-film" href="#/collection" aria-label="Roselle Collection — view the collection">
       <video id="hero-video" poster="img/p5.webp"
              autoplay muted loop playsinline preload="auto"
              disablepictureinpicture disableremoteplayback
              aria-label="The Roselle Collection film">
-        <source src="https://mtjfnfwvpqjxddgxlbgx.supabase.co/storage/v1/object/sign/collection-video/Roselle.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lZTg5NTYyYS1jYjg0LTQzZDAtYWYzOS1iNmJmMjcyNTVlM2IiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJjb2xsZWN0aW9uLXZpZGVvL1Jvc2VsbGUubXA0Iiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4NjgwOTgzMiwiZXhwIjoxODE4MzQ1ODMyfQ._eQh5sErlC_5pVypGpxfDzzLeSYenkagR8rKw2gDMsM" type="video/mp4">
+        <source src="https://mtjfnfwvpqjxddgxlbgx.supabase.co/storage/v1/object/sign/collection-video/Roselle%20V2.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lZTg5NTYyYS1jYjg0LTQzZDAtYWYzOS1iNmJmMjcyNTVlM2IiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJjb2xsZWN0aW9uLXZpZGVvL1Jvc2VsbGUgVjIubXA0Iiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4NjgxOTI3NCwiZXhwIjoxODE4MzU1Mjc0fQ.-Wc_PDFiLWa7pU29ebj9eI3PcHQ4mzVuLzJg9yP1lB8" type="video/mp4">
       </video>
       <p class="film-tag">Roselle Collection</p>
     </a>
