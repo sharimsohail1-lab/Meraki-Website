@@ -388,6 +388,9 @@ function featuredProduct() {
    that has no product to show leaves the wrong garment on screen. */
 var HERO_EDITORIAL = null;
 
+/* Null while the homepage hero is the Roselle film. Everything downstream
+   already guards on it, so the featured-product photograph swap simply has
+   nothing to swap rather than throwing. */
 function heroImg() { return $('.hero-img img'); }
 
 function captureHeroEditorial() {
@@ -502,16 +505,44 @@ function renderProduct() {
   pdp.classList.remove('hidden');
   also.classList.remove('hidden');
 
+  /* A different piece means none of the previous piece's gallery state applies
+     — not the viewer's photographs, not its index, not a half-finished swipe,
+     and not a scroll lock left behind by a viewer that was never closed
+     properly. Done here rather than in the router so it holds however the
+     visitor arrived. */
+  if (renderedSlug !== state.slug) {
+    resetGallery();
+    renderedSlug = state.slug;
+  }
+
   var others = PRODUCTS.filter(function (x) { return x.id !== p.id; });
   var shots = p.images;
   if (state.shot >= shots.length) state.shot = 0;
 
+  /* Everything below reuses one <img> across every product the visitor opens,
+     so each render has to hand it over completely rather than write over the
+     parts it happens to touch. The token is what lets a late callback tell
+     whether the element it is about to change is still the one it was fired
+     for. */
+  pdpRender += 1;
+
   var hero = byId('pdp-hero');
   var shot = shots[state.shot];
-  hero.src = shot.src;
-  hero.alt = shot.alt;
+
+  hero.dataset.render = String(pdpRender);
+  /* The previous product may have spent its one fallback. This one starts
+     with its own. */
+  delete hero.dataset.srcsetRetried;
+
+  /* srcset before src, and this order is load-bearing. Assigning src runs the
+     selection algorithm immediately, and if the previous product's srcset were
+     still on the element the browser would pick a candidate from it — briefly
+     fetching, and possibly showing, a photograph of a different garment. */
   if (shot.srcset) { hero.srcset = shot.srcset; hero.sizes = '(max-width:900px) 100vw, 46vw'; }
   else { hero.removeAttribute('srcset'); hero.removeAttribute('sizes'); }
+  hero.src = shot.src;
+  hero.alt = shot.alt;
+  hero.setAttribute('aria-label', 'View ' + (p.name || 'this piece') + ' larger');
 
   /* One photograph needs no thumbnail strip. Hiding the container rather than
      just emptying it also removes the gallery's 14px flex gap, which an empty
@@ -570,6 +601,9 @@ function renderProduct() {
   add.textContent = inBag ? 'In your inquiry ✓' : (ready ? 'Add to inquiry' : 'Select a size');
   add.disabled = inBag;
 
+  /* With nothing to suggest, the heading and the See More below it would be a
+     section about nothing, so the whole block goes. */
+  also.classList.toggle('hidden', others.length === 0);
   byId('pdp-related').innerHTML = others.slice(0, 4).map(function (x) { return cardHTML(x, true); }).join('');
 }
 
@@ -805,6 +839,180 @@ function showFormError(message) {
   box.classList.remove('hidden');
 }
 
+/* ---------- image viewer ---------- */
+
+/* Opening a photograph is for looking at the embroidery, so the viewer loads
+   the master rather than a rendition — image.src is the master, and no srcset
+   is set here on purpose. The responsive selection on the page itself is
+   untouched; this is a separate, deliberate request for the largest source.
+
+   Only PDP gallery images open it. A catalogue card is a link to a product and
+   stays one. */
+var lightbox = { open: false, shots: [], index: 0, returnFocus: null, scrollY: 0 };
+
+/* Which product the PDP is currently rendered for, and a counter that changes
+   on every render. Between them they let anything asynchronous work out
+   whether the page still belongs to it. */
+var renderedSlug = null;
+var pdpRender = 0;
+var touchStart = null;
+
+/* Hand the gallery over to a different product.
+ *
+ * Called on every change of piece, whether or not the viewer was closed
+ * properly — the point is that it cannot be left holding photographs of a
+ * garment that is no longer on screen. Safe to call when nothing is open. */
+function resetGallery() {
+  if (lightbox.open) closeLightbox();
+  else if (document.body.style.position === 'fixed') unlockPageScroll();   /* left locked somehow */
+
+  lightbox.shots = [];
+  lightbox.index = 0;
+  lightbox.returnFocus = null;
+  touchStart = null;
+
+  var img = byId('lb-img');
+  if (img) { img.removeAttribute('src'); img.removeAttribute('srcset'); img.alt = ''; }
+  byId('lightbox').classList.add('hidden');
+  byId('lb-count').textContent = '';
+}
+
+function lbEl(id) { return byId(id); }
+
+/* iOS ignores `overflow:hidden` on body often enough to be unreliable, so the
+   page is pinned by position and put back exactly where it was on close. */
+function lockPageScroll() {
+  lightbox.scrollY = window.scrollY || window.pageYOffset || 0;
+  document.body.style.position = 'fixed';
+  document.body.style.top = -lightbox.scrollY + 'px';
+  document.body.style.left = '0';
+  document.body.style.right = '0';
+  document.body.style.width = '100%';
+}
+
+function unlockPageScroll() {
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.left = '';
+  document.body.style.right = '';
+  document.body.style.width = '';
+  /* The stylesheet sets scroll-behavior:smooth, which makes this restore an
+     animation that races the layout coming back — the page lands somewhere
+     short of where it started. Putting someone back where they were is not a
+     journey, so it is done instantly and the preference is put back. */
+  var root = document.documentElement;
+  var prior = root.style.scrollBehavior;
+  root.style.scrollBehavior = 'auto';
+  /* Two goes on purpose. Un-fixing the body does not restore the document's
+     full height synchronously, so the first scroll can still be clamped
+     against the collapsed page; the second runs once layout has settled and
+     lands exactly. Reading scrollHeight forces the reflow in between. */
+  var y = lightbox.scrollY;
+  void root.scrollHeight;
+  window.scrollTo(0, y);
+  requestAnimationFrame(function () {
+    window.scrollTo(0, y);
+    root.style.scrollBehavior = prior;
+  });
+}
+
+function renderLightbox() {
+  var shot = lightbox.shots[lightbox.index];
+  if (!shot) return;
+  var img = lbEl('lb-img');
+  /* The master, at full size. No srcset: a rendition is the wrong answer to
+     "let me look closely". */
+  img.removeAttribute('srcset');
+  img.removeAttribute('sizes');
+  img.src = shot.src;
+  img.alt = shot.alt || '';
+
+  var many = lightbox.shots.length > 1;
+  lbEl('lb-prev').classList.toggle('hidden', !many);
+  lbEl('lb-next').classList.toggle('hidden', !many);
+  lbEl('lb-count').textContent = many ? (lightbox.index + 1) + ' / ' + lightbox.shots.length : '';
+}
+
+function openLightbox(shots, index, trigger) {
+  if (!shots || !shots.length) return;
+  lightbox.shots = shots;
+  lightbox.index = Math.max(0, Math.min(index || 0, shots.length - 1));
+  lightbox.returnFocus = trigger || null;
+  lightbox.open = true;
+
+  lockPageScroll();
+  byId('lightbox').classList.remove('hidden');
+  renderLightbox();
+  /* Focus lands on Close so the first key press does the obvious thing, and so
+     focus is never left sitting behind the overlay. */
+  lbEl('lb-close').focus();
+}
+
+function closeLightbox() {
+  if (!lightbox.open) return;
+  lightbox.open = false;
+  byId('lightbox').classList.add('hidden');
+  /* Release the master so a long browse does not hold every photograph open. */
+  lbEl('lb-img').removeAttribute('src');
+  unlockPageScroll();
+  if (lightbox.returnFocus && lightbox.returnFocus.focus) lightbox.returnFocus.focus();
+  lightbox.returnFocus = null;
+}
+
+function stepLightbox(delta) {
+  if (!lightbox.open || lightbox.shots.length < 2) return;
+  var n = lightbox.shots.length;
+  lightbox.index = (lightbox.index + delta + n) % n;   /* wraps both ways */
+  renderLightbox();
+}
+
+/* The photographs of the piece currently on screen. */
+function currentGalleryShots() {
+  var p = findProductBySlug(state.slug);
+  return p ? p.images : [];
+}
+
+/* The main photograph carries button semantics in the markup, so it also has
+   to answer to the keys a button answers to. */
+byId('pdp-hero').addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+  e.preventDefault();
+  openLightbox(currentGalleryShots(), state.shot, byId('pdp-hero'));
+});
+
+byId('lb-close').addEventListener('click', closeLightbox);
+byId('lb-prev').addEventListener('click', function () { stepLightbox(-1); });
+byId('lb-next').addEventListener('click', function () { stepLightbox(1); });
+
+/* Backdrop closes; the photograph itself does not, so an attempt to pinch or
+   pan cannot dismiss it by accident. */
+byId('lightbox').addEventListener('click', function (e) {
+  if (e.target === this || e.target === byId('lb-stage')) closeLightbox();
+});
+
+document.addEventListener('keydown', function (e) {
+  if (!lightbox.open) return;
+  if (e.key === 'Escape') { closeLightbox(); return; }
+  if (e.key === 'ArrowLeft') { stepLightbox(-1); return; }
+  if (e.key === 'ArrowRight') { stepLightbox(1); }
+});
+
+/* Swipe between photographs. Deliberately crude: one axis, one threshold, and
+   it defers to a vertical gesture so panning a zoomed image still works.
+   Declared with the rest of the viewer's state so resetGallery can clear it. */
+byId('lb-stage').addEventListener('touchstart', function (e) {
+  if (e.touches.length !== 1) { touchStart = null; return; }   /* a pinch, leave it alone */
+  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+
+byId('lb-stage').addEventListener('touchend', function (e) {
+  if (!touchStart || !e.changedTouches.length) return;
+  var dx = e.changedTouches[0].clientX - touchStart.x;
+  var dy = e.changedTouches[0].clientY - touchStart.y;
+  touchStart = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) stepLightbox(dx < 0 ? 1 : -1);
+}, { passive: true });
+
 /* ---------- routing ---------- */
 var VIEWS = ['home', 'collection', 'product', 'inquiry'];
 
@@ -850,8 +1058,24 @@ document.addEventListener('click', function (e) {
   var nav = e.target.closest('[data-nav]');
   if (nav) { location.hash = nav.dataset.nav; return; }
 
+  /* A thumbnail does both: it becomes the main photograph, so closing the
+     viewer leaves the page on the shot the visitor last looked at, and it
+     opens the viewer at that same shot. */
   var shot = e.target.closest('[data-shot]');
-  if (shot) { state.shot = Number(shot.dataset.shot); renderProduct(); return; }
+  if (shot) {
+    var i = Number(shot.dataset.shot);
+    state.shot = i;
+    renderProduct();
+    openLightbox(currentGalleryShots(), i, shot);
+    return;
+  }
+
+  /* Only the PDP gallery opens the viewer. A catalogue card is a link to a
+     product and stays one — it is not caught here at all. */
+  if (e.target.id === 'pdp-hero') {
+    openLightbox(currentGalleryShots(), state.shot, byId('pdp-hero'));
+    return;
+  }
 
   var size = e.target.closest('[data-size]');
   if (size) { state.size = size.dataset.size; renderProduct(); return; }
@@ -1109,6 +1333,19 @@ document.addEventListener('error', function (e) {
   var img = e.target;
   if (!img || img.tagName !== 'IMG') return;
   if (!img.getAttribute('srcset') || img.dataset.srcsetRetried) return;
+
+  /* Three ways an error can arrive for a load nobody is waiting for any more,
+     and acting on any of them would damage whatever is on screen now.
+
+     Detached: the element belonged to a grid that has since been rebuilt. */
+  if (!img.isConnected) return;
+  /* Already showing a photograph: the failure was for an earlier load that has
+     since been superseded, and this element is fine. */
+  if (img.complete && img.naturalWidth > 0) return;
+  /* The shared PDP photograph, carrying a different product than the one this
+     event was fired for. */
+  if (img.dataset.render && img.dataset.render !== String(pdpRender)) return;
+
   img.dataset.srcsetRetried = '1';
   if (window.console && console.warn) {
     console.warn('Image candidate failed; falling back to the master:', img.currentSrc || img.src);
@@ -1120,6 +1357,47 @@ document.addEventListener('error', function (e) {
   var src = img.getAttribute('src');
   if (src) img.src = src;
 }, true);
+
+/* The Roselle film.
+ *
+ * It autoplays from the markup so it starts as early as possible; the only
+ * thing needed here is to stop it for a visitor who has asked for less motion.
+ * Pausing leaves the frame it reached on screen — or the poster, if it had not
+ * started — which is a still image rather than a blank rectangle, and the
+ * caption and its link keep working either way. No player is built.
+ *
+ * The preference is watched rather than read once, so turning it on in the OS
+ * takes effect without a reload. */
+function setupHeroFilm() {
+  var video = byId('hero-video');
+  if (!video) return;
+
+  var query = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  var apply = function () {
+    if (query && query.matches) {
+      video.autoplay = false;
+      video.removeAttribute('autoplay');
+      video.loop = false;
+      if (!video.paused) video.pause();
+    } else {
+      video.loop = true;
+      /* Autoplay can be refused — a data saver, a battery mode, a browser
+         policy. Nothing is done about it on purpose: the poster stays, which
+         is exactly the fallback wanted. */
+      var attempt = video.play();
+      if (attempt && attempt.catch) attempt.catch(function () {});
+    }
+  };
+
+  apply();
+  if (query) {
+    if (query.addEventListener) query.addEventListener('change', apply);
+    else if (query.addListener) query.addListener(apply);
+  }
+}
+
+setupHeroFilm();
 
 window.addEventListener('hashchange', route);
 renderCopyrightYear();
