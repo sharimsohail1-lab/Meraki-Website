@@ -20,6 +20,8 @@ var REQUEST_TIMEOUT_MS = 10000;
 var LIMITS = {
   body: 16 * 1024,        /* bytes of JSON we will even parse */
   name: 120,
+  state: 2,
+  preferredSize: 16,
   phoneRaw: 40,           /* before normalising: room for "+1 (201) 555-1234" */
   email: 254,             /* RFC maximum */
   note: 2000,
@@ -72,6 +74,36 @@ function normalizeUsPhone(raw) {
   return '+1' + digits;
 }
 
+/* ------------------------------------------------------------- state + size */
+
+/* Two answers that belong to the inquiry rather than to any garment in it: a
+   customer has one size and lives in one place. Both lists are closed, and both
+   are duplicated in sql/002 — the database refuses anything else, so a value
+   that got past here would still not be stored. */
+var US_STATES = ('AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD ' +
+  'MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT ' +
+  'VA WA WV WI WY DC').split(' ');
+
+/* Canonical spelling on the way out, case-insensitive on the way in. A value
+   that is not one of these is refused rather than guessed at — quietly mapping
+   an unrecognised size onto a real one would put words in a customer's mouth. */
+var PREFERRED_SIZES = ['38', '40', '42', '44', '46', '48', '50', '52', 'Free Size', 'Unsure'];
+
+function normalizeState(raw) {
+  if (blank(raw)) return null;
+  var s = String(raw).trim().toUpperCase();
+  return US_STATES.indexOf(s) === -1 ? null : s;
+}
+
+function normalizePreferredSize(raw) {
+  if (blank(raw)) return null;
+  var s = String(raw).trim().toLowerCase();
+  for (var i = 0; i < PREFERRED_SIZES.length; i++) {
+    if (PREFERRED_SIZES[i].toLowerCase() === s) return PREFERRED_SIZES[i];
+  }
+  return null;
+}
+
 /* ------------------------------------------------------------------ email */
 
 /* Deliberately permissive: the only email that matters is one that can receive
@@ -111,6 +143,19 @@ function parseSubmission(body) {
   var email = normalizeEmail(c.email);
   if (!email.ok) return { error: 'invalid_email' };
 
+  /* Required for every new inquiry. Historical rows have neither, which is why
+     the columns stay nullable — but nothing arriving now is allowed to be as
+     thin as they were. */
+  if (blank(c.state) || String(c.state).length > LIMITS.state + 8) return { error: 'state_required' };
+  var state = normalizeState(c.state);
+  if (!state) return { error: 'invalid_state' };
+
+  if (blank(c.preferred_size) || String(c.preferred_size).length > LIMITS.preferredSize) {
+    return { error: 'preferred_size_required' };
+  }
+  var preferredSize = normalizePreferredSize(c.preferred_size);
+  if (!preferredSize) return { error: 'invalid_preferred_size' };
+
   var items = Array.isArray(body.items) ? body.items : null;
   if (!items || items.length === 0) return { error: 'no_items' };
   if (items.length > LIMITS.items) return { error: 'too_many_items' };
@@ -120,12 +165,7 @@ function parseSubmission(body) {
     var it = items[i];
     if (!it || typeof it !== 'object') return { error: 'invalid_item' };
     if (!isUuid(it.product_id)) return { error: 'invalid_product_id' };
-    parsed.push({
-      product_id: String(it.product_id).trim().toLowerCase(),
-      /* Normally null — the size selector is hidden storefront-wide. A bag
-         saved before that still carries one, and it is kept as written. */
-      requested_size: text(it.requested_size, LIMITS.size)
-    });
+    parsed.push({ product_id: String(it.product_id).trim().toLowerCase() });
   }
 
   /* The same piece twice is a double-tap, not two requests. */
@@ -142,6 +182,8 @@ function parseSubmission(body) {
       customer_name: name,
       phone: phone,
       email: email.value,
+      state: state,
+      preferred_size: preferredSize,
       note: text(c.note, LIMITS.note),
       items: unique
     }
@@ -251,7 +293,9 @@ module.exports = function handler(req, res) {
           product_slug: row.slug || null,
           product_sku: row.sku || null,
           product_name: row.name || null,
-          requested_size: sub.items[i].requested_size,
+          /* Size is an inquiry-level answer now. The column stays for the
+             records written before that was true; nothing new fills it. */
+          requested_size: null,
           price_snapshot: (row.price === null || row.price === undefined) ? null : row.price,
           sort_order: i
         });
@@ -265,6 +309,8 @@ module.exports = function handler(req, res) {
           p_customer_name: sub.customer_name,
           p_phone: sub.phone,
           p_email: sub.email,
+          p_state: sub.state,
+          p_preferred_size: sub.preferred_size,
           p_note: sub.note,
           p_items: items
         })
@@ -300,6 +346,10 @@ module.exports = function handler(req, res) {
 
 /* Exported for tests. Not routes. */
 module.exports.normalizeUsPhone = normalizeUsPhone;
+module.exports.normalizeState = normalizeState;
+module.exports.normalizePreferredSize = normalizePreferredSize;
+module.exports.US_STATES = US_STATES;
+module.exports.PREFERRED_SIZES = PREFERRED_SIZES;
 module.exports.normalizeEmail = normalizeEmail;
 module.exports.parseSubmission = parseSubmission;
 module.exports.LIMITS = LIMITS;

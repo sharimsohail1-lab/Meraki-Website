@@ -223,6 +223,22 @@ h1.pname{margin:0;font:300 clamp(30px,3.6vw,46px)/1.1 var(--serif);letter-spacin
 .form>p:first-child{margin:0;font:300 clamp(21px,2.2vw,27px)/1.3 var(--serif)}
 .form label{display:flex;flex-direction:column;gap:7px;font:300 10px/1 var(--sans);
   letter-spacing:.18em;text-transform:uppercase;color:var(--soft)}
+/* Selects sit on the same hairline as the inputs. appearance:none removes the
+   platform chrome that would otherwise import a grey rounded box into the form;
+   the chevron is drawn back in so it still reads as a menu. 16px stops iOS
+   zooming the page when the field is focused. */
+.form select{appearance:none;-webkit-appearance:none;width:100%;max-width:100%;
+  border:none;border-bottom:1px solid rgba(42,31,34,.25);background:transparent;
+  padding:9px 26px 11px 0;font:300 16px/1.4 var(--sans);color:var(--ink);
+  border-radius:0;cursor:pointer;
+  background-image:linear-gradient(45deg,transparent 50%,var(--soft) 50%),
+                   linear-gradient(135deg,var(--soft) 50%,transparent 50%);
+  background-position:calc(100% - 11px) calc(50% + 1px),calc(100% - 6px) calc(50% + 1px);
+  background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.form select:focus{outline:none;border-bottom-color:var(--ink)}
+.form select[aria-invalid=true]{border-bottom-color:#9B3A2F}
+.form .hint{font:300 11.5px/1.6 var(--sans);letter-spacing:0;text-transform:none;color:var(--soft)}
+
 .form input,.form textarea{border:none;border-bottom:1px solid rgba(42,31,34,.25);background:transparent;
   padding:11px 2px;font:300 15px/1.5 var(--sans);color:var(--ink);outline:none;letter-spacing:0;text-transform:none}
 .form textarea{resize:vertical;line-height:1.6}

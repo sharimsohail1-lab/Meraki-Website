@@ -698,16 +698,17 @@ function inquiryPayload(form) {
       name: form.name.value.trim(),
       phone: form.phone.value.trim(),
       email: form.email.value.trim(),
+      /* Inquiry-level: one state, one size, however many pieces. */
+      state: form.state.value,
+      preferred_size: form.preferred_size.value,
       note: form.note.value.trim()
     },
     items: state.bag.map(function (b) {
       var p = findBagProduct(b.id);
-      return {
-        product_id: p ? p.id : b.id,
-        /* Normally null — the size selector is hidden. A bag saved before that
-           still carries one, and it travels as written. */
-        requested_size: blank(b.size) ? null : String(b.size)
-      };
+      /* Product id only. Size is asked once for the whole inquiry now, so
+         nothing per-item is sent — inquiry_items.requested_size stays for the
+         records written before that was true. */
+      return { product_id: p ? p.id : b.id };
     })
   };
 }
@@ -791,7 +792,8 @@ function setFieldError(name, message) {
 }
 
 function clearFieldErrors() {
-  ['name', 'phone', 'email', 'note'].forEach(function (n) { setFieldError(n, ''); });
+  ['name', 'phone', 'email', 'state', 'preferred_size', 'note']
+    .forEach(function (n) { setFieldError(n, ''); });
   var box = byId('inq-error');
   if (box) { box.textContent = ''; box.classList.add('hidden'); }
 }
@@ -811,6 +813,9 @@ function validateInquiryForm(form) {
   if (!blank(form.email.value) && !EMAIL_RE.test(form.email.value.trim().toLowerCase())) {
     fail('email', 'This email address doesn\'t look right.');
   }
+
+  if (blank(form.state.value)) fail('state', 'Please choose your state.');
+  if (blank(form.preferred_size.value)) fail('preferred_size', 'Please choose a preferred size.');
 
   if (form.note.value.length > 2000) fail('note', 'Please keep this under 2000 characters.');
 
@@ -1148,11 +1153,15 @@ byId('inquiry-form').addEventListener('submit', function (e) {
         code === 'invalid_phone' ? 'Enter a valid 10-digit U.S. phone number.'
         : code === 'invalid_email' ? 'This email address doesn\'t look right.'
         : code === 'name_required' ? 'Please tell us your name.'
+        : (code === 'state_required' || code === 'invalid_state') ? 'Please choose your state.'
+        : (code === 'preferred_size_required' || code === 'invalid_preferred_size') ? 'Please choose a preferred size.'
         : code === 'product_unavailable' ? 'One of these pieces is no longer available. Please remove it and try again.'
         : code === 'too_many_requests' ? 'That was a lot of tries at once. Please wait a moment and send again.'
         : 'We couldn\'t send your inquiry just now. Please try again in a moment.');
       if (code === 'invalid_phone') { setFieldError('phone', 'Enter a valid 10-digit U.S. phone number.'); focusField('phone'); }
       if (code === 'invalid_email') { setFieldError('email', 'This email address doesn\'t look right.'); focusField('email'); }
+      if (code === 'state_required' || code === 'invalid_state') { setFieldError('state', 'Please choose your state.'); focusField('state'); }
+      if (code === 'preferred_size_required' || code === 'invalid_preferred_size') { setFieldError('preferred_size', 'Please choose a preferred size.'); focusField('preferred_size'); }
     })
     .then(function () {
       submitting = false;
@@ -1162,6 +1171,13 @@ byId('inquiry-form').addEventListener('submit', function (e) {
 
 /* Validate on the way out of a field rather than on every keystroke: nobody
    wants to be told their phone number is wrong while they are still typing it. */
+/* A select answers on change rather than on blur — the error should clear the
+   moment a choice is made, not when focus happens to leave. */
+['state', 'preferred_size'].forEach(function (name) {
+  var el = $('#inquiry-form [name="' + name + '"]');
+  if (el) el.addEventListener('change', function () { if (!blank(el.value)) setFieldError(name, ''); });
+});
+
 ['name', 'phone', 'email'].forEach(function (name) {
   var input = $('#inquiry-form [name="' + name + '"]');
   if (!input) return;
