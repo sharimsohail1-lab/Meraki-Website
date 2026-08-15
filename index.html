@@ -109,7 +109,9 @@
       <div class="steps">
         <div><span>01</span><span>Send an inquiry with the looks you love</span></div>
         <div><span>02</span><span>We confirm sizing, fabric and price over WhatsApp</span></div>
-        <div><span>03</span><span>Your piece is cut, embroidered and shipped in 4–6 weeks</span></div>
+        <!-- The lead time is filled from Website Settings; empty here so a
+             figure Saima has changed in the app can never flash on screen. -->
+        <div><span>03</span><span>Your piece is cut, embroidered and shipped<span class="hidden" id="step-lead-time"></span></span></div>
       </div>
     </div>
     <div class="mto-img">
@@ -162,10 +164,10 @@
         <p class="pstatus"><span class="dot" id="pdp-dot"></span><span id="pdp-status"></span></p>
       </div>
       <p class="desc" id="pdp-desc"></p>
-      <div style="display:flex;flex-direction:column;gap:12px;padding-top:6px">
+      <div style="display:flex;flex-direction:column;gap:12px;padding-top:6px" id="pdp-size-block">
         <div class="sizes-head">
           <p class="label">Size</p>
-          <span class="label">Sizes 38–46 &amp; custom</span>
+          <span class="label" id="pdp-size-note"></span>
         </div>
         <div class="sizes" id="pdp-sizes" role="group" aria-label="Choose a size"></div>
       </div>
@@ -200,7 +202,7 @@
   </div>
   <div class="thanks hidden" id="inq-thanks">
     <h1>Thank you.</h1>
-    <p>Saima will write to you personally within one working day to confirm sizing, fabric and timing.</p>
+    <p id="inq-response-note"></p>
     <button class="pill pill-ghost sm" data-nav="#/collection">Continue browsing</button>
   </div>
 </div>
@@ -219,20 +221,20 @@
       <a href="#/ready">Ready now</a>
       <a href="#/made-to-order">Made to order</a>
     </div>
-    <div class="fcol">
+    <div class="fcol" id="footer-contact">
       <p class="head">Contact</p>
-      <a href="https://wa.me/" target="_blank" rel="noopener">WhatsApp</a>
-      <a href="mailto:hello@merakibysaima.com">hello@merakibysaima.com</a>
-      <a href="https://instagram.com" target="_blank" rel="noopener">Instagram</a>
+      <a id="contact-whatsapp" class="hidden" target="_blank" rel="noopener">WhatsApp</a>
+      <a id="contact-email" class="hidden"></a>
+      <a id="contact-instagram" class="hidden" target="_blank" rel="noopener">Instagram</a>
     </div>
     <div class="fcol">
       <p class="head">Service</p>
-      <p class="line">Made to order · 4–6 weeks</p>
-      <p class="line">Sizes 38 – 46 &amp; custom</p>
-      <p class="line">Lahore, Pakistan</p>
+      <p class="line">Made to order<span class="hidden" id="footer-lead-time"></span></p>
+      <p class="line hidden" id="footer-size-note"></p>
+      <p class="line hidden" id="footer-location"></p>
     </div>
   </div>
-  <p class="copyright">© 2026 Meraki by Saima</p>
+  <p class="copyright">© <span id="copyright-year">2026</span> Meraki by Saima</p>
 </footer>
 
 <script src="script.js"></script>

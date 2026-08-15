@@ -35,6 +35,9 @@ header{position:sticky;top:0;z-index:60;background:rgba(251,248,244,.9);
 .hdr nav{flex:1 1 0;display:flex;gap:26px;align-items:center;min-width:0}
 .hdr .brand{flex:0 0 auto}
 .hdr .brand img{height:clamp(38px,5.2vw,52px);width:auto;mix-blend-mode:multiply}
+/* The wordmark reads too small against the navigation on a wide screen. Desktop
+   only — below 900px the header is already tight and the mobile size stands. */
+@media(min-width:900px){.hdr .brand img{height:clamp(52px,4.4vw,64px)}}
 .hdr .right{flex:1 1 0;display:flex;justify-content:flex-end;align-items:center;gap:18px}
 .inquiry-btn{border:1px solid rgba(42,31,34,.22);background:transparent;padding:10px 16px;border-radius:999px;
   font:400 10.5px/1 var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--ink);
@@ -124,8 +127,13 @@ h1.page{margin:0 0 8px;font:300 clamp(32px,4.6vw,58px)/1.1 var(--serif)}
 /* product detail */
 .back{display:inline-block;margin-bottom:clamp(22px,3vw,40px);font:300 10.5px/1 var(--sans);
   letter-spacing:.2em;text-transform:uppercase;color:var(--soft)}
-.pdp{display:flex;flex-wrap:wrap;gap:clamp(28px,4vw,70px);align-items:flex-start}
-.gallery{flex:1 1 440px;display:flex;flex-direction:column;gap:14px}
+.pdp{display:flex;flex-wrap:wrap;gap:clamp(28px,4vw,70px);align-items:flex-start;
+  max-width:1240px;margin:0 auto}
+/* Capped so the photograph is never asked to fill more pixels than the widest
+   rendition holds. At 1920 the gallery was 1162px wide, which on a 2x display
+   wanted 2324px from a 1400px master — visibly soft. 600px needs 1200px at 2x,
+   inside the master, and leaves more air around the image. */
+.gallery{flex:1 1 440px;max-width:600px;display:flex;flex-direction:column;gap:14px}
 .gallery .main{position:relative;aspect-ratio:3/4.2;background:var(--stone);overflow:hidden}
 .gallery .main img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 18%}
 .thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
@@ -140,7 +148,11 @@ h1.pname{margin:0;font:300 clamp(30px,3.6vw,46px)/1.1 var(--serif);letter-spacin
 .pstatus{margin:5px 0 0;display:flex;align-items:center;gap:8px;font:300 10px/1.4 var(--sans);
   letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
 .desc{margin:0;font:300 14.5px/1.9 var(--sans);color:var(--muted);text-wrap:pretty}
-.sizes-head{display:flex;justify-content:space-between;align-items:baseline}
+/* The right-hand note comes from Website Settings and is written by Saima, so
+   its length is not something this stylesheet can assume. It wraps under the
+   "Size" label rather than squeezing it. */
+.sizes-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px 16px;flex-wrap:wrap}
+#pdp-size-note{text-align:right;max-width:34ch}
 .label{margin:0;font:300 10px/1 var(--sans);letter-spacing:.2em;text-transform:uppercase;color:var(--soft)}
 .sizes{display:flex;flex-wrap:wrap;gap:9px}
 .sizes button{min-width:52px;min-height:46px;padding:0 16px;border:1px solid rgba(42,31,34,.22);
@@ -156,7 +168,7 @@ h1.pname{margin:0;font:300 clamp(30px,3.6vw,46px)/1.1 var(--serif);letter-spacin
 .specs div{display:flex;gap:20px;padding:15px 0;border-bottom:1px solid rgba(42,31,34,.13)}
 .specs .k{margin:0;flex:0 0 116px;font:300 10px/1.6 var(--sans);letter-spacing:.18em;text-transform:uppercase;color:var(--soft)}
 .specs .v{margin:0;flex:1 1 auto;font:300 13.5px/1.7 var(--sans)}
-.also{margin-top:clamp(56px,8vw,110px)}
+.also{margin-top:clamp(56px,8vw,110px);max-width:1240px;margin-left:auto;margin-right:auto}
 .also>p{margin:0 0 26px;font:300 10.5px/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:var(--soft)}
 
 /* inquiry */
@@ -195,7 +207,11 @@ footer{border-top:1px solid rgba(42,31,34,.11);padding:clamp(44px,5vw,72px) var(
   display:flex;flex-direction:column;gap:clamp(32px,4vw,54px)}
 .fcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:34px}
 .fcol{display:flex;flex-direction:column;gap:11px}
-.fcol img{height:54px;width:auto;mix-blend-mode:multiply;margin-left:-4px}
+/* align-self is load-bearing: .fcol is a flex column, so the default
+   align-items:stretch was overriding width:auto and pulling the logo to the
+   full column width — 417px at 54px tall, a 5x horizontal stretch. Restoring
+   flex-start lets width:auto honour the real 3:2 aspect again. */
+.fcol img{height:46px;width:auto;align-self:flex-start;mix-blend-mode:multiply;margin-left:-4px}
 .fcol .blurb{margin:0;max-width:26ch;font:300 12.5px/1.8 var(--sans);color:var(--soft)}
 .fcol .head{margin:0 0 4px;font:300 10px/1 var(--sans);letter-spacing:.2em;text-transform:uppercase;color:var(--soft)}
 .fcol a,.fcol .line{font:300 13px/1.7 var(--sans);color:var(--ink);margin:0}
