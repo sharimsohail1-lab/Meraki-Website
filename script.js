@@ -388,6 +388,9 @@ function featuredProduct() {
    that has no product to show leaves the wrong garment on screen. */
 var HERO_EDITORIAL = null;
 
+/* Null while the homepage hero is the Roselle film. Everything downstream
+   already guards on it, so the featured-product photograph swap simply has
+   nothing to swap rather than throwing. */
 function heroImg() { return $('.hero-img img'); }
 
 function captureHeroEditorial() {
@@ -1354,6 +1357,47 @@ document.addEventListener('error', function (e) {
   var src = img.getAttribute('src');
   if (src) img.src = src;
 }, true);
+
+/* The Roselle film.
+ *
+ * It autoplays from the markup so it starts as early as possible; the only
+ * thing needed here is to stop it for a visitor who has asked for less motion.
+ * Pausing leaves the frame it reached on screen — or the poster, if it had not
+ * started — which is a still image rather than a blank rectangle, and the
+ * caption and its link keep working either way. No player is built.
+ *
+ * The preference is watched rather than read once, so turning it on in the OS
+ * takes effect without a reload. */
+function setupHeroFilm() {
+  var video = byId('hero-video');
+  if (!video) return;
+
+  var query = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  var apply = function () {
+    if (query && query.matches) {
+      video.autoplay = false;
+      video.removeAttribute('autoplay');
+      video.loop = false;
+      if (!video.paused) video.pause();
+    } else {
+      video.loop = true;
+      /* Autoplay can be refused — a data saver, a battery mode, a browser
+         policy. Nothing is done about it on purpose: the poster stays, which
+         is exactly the fallback wanted. */
+      var attempt = video.play();
+      if (attempt && attempt.catch) attempt.catch(function () {});
+    }
+  };
+
+  apply();
+  if (query) {
+    if (query.addEventListener) query.addEventListener('change', apply);
+    else if (query.addListener) query.addListener(apply);
+  }
+}
+
+setupHeroFilm();
 
 window.addEventListener('hashchange', route);
 renderCopyrightYear();

@@ -43,6 +43,16 @@ header{position:sticky;top:0;z-index:60;background:rgba(251,248,244,.9);
   font:400 10.5px/1 var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--ink);
   display:flex;align-items:center;gap:9px;transition:border-color .25s,background .25s}
 .inquiry-btn:hover{border-color:var(--plum);background:rgba(110,20,54,.05)}
+/* Sized as a 44px target while the mark itself stays 19px, so it reads as a
+   quiet line icon beside the Inquiry control and never competes with the
+   wordmark. */
+.iconlink{display:inline-flex;align-items:center;justify-content:center;
+  width:44px;height:44px;margin-right:-8px;color:var(--ink);
+  transition:color .25s,opacity .25s;opacity:.78}
+.iconlink:hover{color:var(--plum);opacity:1}
+.iconlink:focus-visible{outline:2px solid var(--plum);outline-offset:-6px;border-radius:8px}
+@media(max-width:420px){.iconlink{width:40px;height:40px;margin-right:-10px}}
+
 .badge{min-width:19px;height:19px;border-radius:999px;background:var(--plum);color:#fff;
   display:inline-flex;align-items:center;justify-content:center;font-size:10px;letter-spacing:0;padding:0 5px}
 .mobnav{display:none;gap:22px;padding:11px 18px 12px;overflow-x:auto;border-top:1px solid rgba(42,31,34,.06)}
@@ -65,6 +75,31 @@ h1.display em{font-style:italic;color:var(--plum)}
 .btnrow{display:flex;flex-wrap:wrap;gap:14px;margin-top:6px}
 .hero-img{flex:1 1 520px;position:relative;min-height:clamp(420px,72vh,820px);background:var(--stone)}
 .hero-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 22%}
+/* The film occupies the photograph's footprint exactly, so the hero's flex
+   behaviour and the page below it are unchanged. display:block on the anchor
+   stops the inline baseline gap from adding a stripe under it. */
+.hero-film{display:block;overflow:hidden;color:inherit}
+.hero-film:hover{color:inherit}
+.hero-film video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  object-position:50% 28%;display:block;background:var(--stone)}
+/* A phone crops far more aggressively than a wide screen, so the framing moves
+   up to keep the garment rather than the floor. */
+@media(max-width:940px){.hero-film video{object-position:50% 22%}}
+
+/* Editorial rather than a banner: the site's own micro-caps, over a gradient
+   that only exists where the words are so the film is never dimmed as a whole. */
+.film-tag{position:absolute;left:0;right:0;bottom:0;margin:0;
+  padding:clamp(56px,9vw,110px) clamp(18px,3vw,34px) clamp(18px,3vw,32px);
+  font:400 11px/1 var(--sans);letter-spacing:.3em;text-transform:uppercase;color:#FBF8F4;
+  text-shadow:0 1px 14px rgba(24,16,18,.5);
+  background:linear-gradient(to top,rgba(24,16,18,.5),rgba(24,16,18,0))}
+.hero-film:focus-visible{outline:2px solid var(--plum);outline-offset:-4px}
+
+/* A visitor who has asked for less motion gets a still frame, not a loop. The
+   film is paused in script.js; this keeps it from animating in any other way. */
+@media(prefers-reduced-motion:reduce){
+  .hero-film video{animation:none!important}
+}
 .hero-tag{position:absolute;left:clamp(18px,3vw,34px);bottom:clamp(18px,3vw,34px);
   background:rgba(251,248,244,.92);backdrop-filter:blur(6px);padding:14px 20px;border-radius:2px}
 .hero-tag p:first-child{margin:0;font:400 15px/1.2 var(--serif);letter-spacing:.06em}

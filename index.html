@@ -37,6 +37,18 @@
     </nav>
     <a class="brand" href="#/"><img src="img/logo.png" alt="Meraki by Saima" width="330" height="220"></a>
     <div class="right">
+      <!-- Line-drawn to sit with the rest of the header's type rather than as a
+           filled brand badge. currentColor so it picks up the same ink. -->
+      <a class="iconlink" id="header-instagram"
+         href="https://www.instagram.com/merakibysaima.usa/"
+         target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+             stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <rect x="3" y="3" width="18" height="18" rx="5"></rect>
+          <circle cx="12" cy="12" r="4"></circle>
+          <circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" stroke="none"></circle>
+        </svg>
+      </a>
       <button class="inquiry-btn" data-nav="#/inquiry">Inquiry <span class="badge" id="bag-count" aria-live="polite">0</span></button>
     </div>
   </div>
@@ -62,29 +74,24 @@
         <button class="pill pill-ghost" data-nav="#/ready">Ready now</button>
       </div>
     </div>
-    <div class="hero-img">
-      <img src="img/p5.webp"
-           srcset="img/sm/p5.webp 560w, img/md/p5.webp 960w, img/p5.webp 1400w"
-           sizes="(max-width:940px) 100vw, 53vw"
-           alt="A Meraki look — rose pink silk with a saffron chiffon dupatta"
-           fetchpriority="high" decoding="async">
-      <!-- The alt describes what is visible in this photograph and names no
-           product on purpose: script.js replaces both the image and the alt
-           when a featured piece is set, and a garment name written here would
-           go on describing a piece that may not be the one on screen — or may
-           no longer be in the catalogue at all.
+    <!-- The Roselle film, in the slot the hero photograph used to hold. The
+         whole block is the link, so the film and its caption go to the same
+         place a visitor would expect.
 
-           The caption below is filled from the catalogue via the featured
-           product in Website Settings, so it cannot contradict the product
-           page. Caption and photograph move together: if the featured piece
-           has no usable image, neither changes and no caption is shown. The
-           photograph stays in the markup so the preload scanner can find it
-           for LCP. -->
-      <div class="hero-tag hidden" id="hero-tag">
-        <p id="hero-name"></p>
-        <p id="hero-status"></p>
-      </div>
-    </div>
+         The signed Storage URL is used verbatim and expires in about a year;
+         only the ampersands are entity-escaped, which is what an HTML
+         attribute requires and what the browser undoes on parse. The poster is
+         the photograph that was already here, so there is no blank rectangle
+         while the film loads and no new asset to ship. -->
+    <a class="hero-img hero-film" href="#/collection" aria-label="Roselle Collection — view the collection">
+      <video id="hero-video" poster="img/p5.webp"
+             autoplay muted loop playsinline preload="auto"
+             disablepictureinpicture disableremoteplayback
+             aria-label="The Roselle Collection film">
+        <source src="https://mtjfnfwvpqjxddgxlbgx.supabase.co/storage/v1/object/sign/collection-video/Roselle.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lZTg5NTYyYS1jYjg0LTQzZDAtYWYzOS1iNmJmMjcyNTVlM2IiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJjb2xsZWN0aW9uLXZpZGVvL1Jvc2VsbGUubXA0Iiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4NjgwOTgzMiwiZXhwIjoxODE4MzQ1ODMyfQ._eQh5sErlC_5pVypGpxfDzzLeSYenkagR8rKw2gDMsM" type="video/mp4">
+      </video>
+      <p class="film-tag">Roselle Collection</p>
+    </a>
   </section>
 
   <section class="section" id="featured">
