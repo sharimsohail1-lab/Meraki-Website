@@ -7,15 +7,19 @@
 -- one size and lives in one place; asking per garment would ask the same
 -- question repeatedly and invite contradictory answers.
 --
--- inquiry_items.requested_size is deliberately left alone. Inquiries taken
--- before this migration carry sizes there, and those records have to keep
--- meaning what they meant. Nothing new writes to it.
+-- ROLLOUT. This file is additive only. It adds two columns, two helpers and a
+-- new eight-argument overload of create_website_inquiry, and it does not touch
+-- the six-argument function that the currently-deployed website calls. Running
+-- this changes nothing about how the live site behaves: it keeps calling the
+-- six-argument form, which keeps working, and the new overload sits unused
+-- until the new website is deployed. Dropping the old signature is a later,
+-- optional cleanup and is deliberately not part of getting this live.
 
 -- ------------------------------------------------------------- columns
 -- Nullable on purpose. Rows already in the table predate both questions, and
 -- there is no honest value to backfill them with — a guessed state or size
 -- would be worse than an admitted absence. New submissions are required to
--- supply both, and that requirement lives in the endpoint and in this
+-- supply both, and that requirement lives in the endpoint and in the new
 -- function, where it can be enforced without rewriting history.
 alter table public.inquiries add column if not exists state text;
 alter table public.inquiries add column if not exists preferred_size text;
@@ -85,12 +89,17 @@ returns text language sql immutable as $$
   end
 $$;
 
--- ------------------------------------------------------------- the RPC
--- Same function as 001 with two more parameters. Everything that made it worth
--- having is unchanged: one transaction for the inquiry and all its items, the
--- unique constraint on client_submission_id as the arbiter of duplicates,
--- security definer with a pinned search_path, and items built entirely from
--- product rows the endpoint has already re-read.
+-- --------------------------------------------- the new eight-argument RPC
+-- A new overload, not a replacement. Postgres keys a function by its parameter
+-- list, so creating this leaves the six-argument version from 001 untouched and
+-- still callable — which is what lets the live site keep taking inquiries while
+-- this sits here unused, waiting for the new website.
+--
+-- Everything that made the original worth having is unchanged: one transaction
+-- for the inquiry and all of its items, the unique constraint on
+-- client_submission_id as the arbiter of duplicates, security definer with a
+-- pinned search_path, and items built entirely from product rows the endpoint
+-- has already re-read.
 create or replace function public.create_website_inquiry(
   p_client_submission_id uuid,
   p_customer_name text,
@@ -115,8 +124,9 @@ begin
     raise exception 'inquiry must have at least one item' using errcode = '22023';
   end if;
 
-  -- Checked here as well as in the endpoint. This function is the only way in,
-  -- so it is the right place for the invariant to be unconditional.
+  -- Checked here as well as in the endpoint. This function is the only way in
+  -- for a new inquiry, so it is the right place for the invariant to be
+  -- unconditional.
   v_state := public.normalize_us_state(p_state);
   if v_state is null then
     raise exception 'invalid or missing state' using errcode = '22023';
@@ -146,9 +156,12 @@ begin
     return;
   end if;
 
-  -- requested_size is still read from the item payload so the column keeps
-  -- working for anything that ever needs it again, but the website stops
-  -- sending it and every new row lands NULL.
+  -- requested_size is written as a literal NULL rather than read from the
+  -- payload. Size is an inquiry-level answer now, and the column exists only
+  -- for the records written before that was true. Hard-coding it here means a
+  -- malformed or stale client that still sends a per-item size cannot put one
+  -- back into the table — the architecture is enforced by the database rather
+  -- than only agreed with the caller.
   insert into public.inquiry_items (
     inquiry_id, product_id, product_slug, product_sku, product_name,
     requested_size, price_snapshot, sort_order)
@@ -158,7 +171,7 @@ begin
     item->>'product_slug',
     item->>'product_sku',
     item->>'product_name',
-    nullif(item->>'requested_size', ''),
+    null,
     nullif(item->>'price_snapshot', '')::numeric,
     coalesce((item->>'sort_order')::int, 0)
   from jsonb_array_elements(p_items) as item;
@@ -168,53 +181,15 @@ begin
   return next;
 end $$;
 
--- ------------------------------------------- the six-argument original
--- Postgres treats a different parameter list as a different function, so the
--- version from 001 still exists after the one above is created. It is left in
--- place deliberately: between running this migration and deploying the new
--- website code, the live site is still calling the six-argument form, and
--- removing it would take inquiries down for that window.
---
--- Redefined as a thin delegate so there is only one implementation. It passes
--- NULL for the two new answers, which the new function refuses — so the old
--- path now fails loudly rather than writing a half-answered inquiry.
---
--- Once the new website is deployed and submitting successfully, this can go:
---
---   drop function if exists public.create_website_inquiry(uuid, text, text, text, text, jsonb);
---
-create or replace function public.create_website_inquiry(
-  p_client_submission_id uuid,
-  p_customer_name text,
-  p_phone text,
-  p_email text,
-  p_note text,
-  p_items jsonb
-)
-returns table (inquiry_id uuid, duplicate boolean)
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  return query select * from public.create_website_inquiry(
-    p_client_submission_id, p_customer_name, p_phone, p_email,
-    null::text, null::text, p_note, p_items);
-end $$;
-
 -- ------------------------------------------------------------- grants
--- create or replace preserves existing privileges, but the eight-argument
--- function is new and starts with the default of EXECUTE granted to PUBLIC.
--- Stated explicitly so the posture does not depend on defaults: everything is
--- taken away, then given back to the one role the endpoint runs as.
+-- Only for the function this file creates. A newly created function starts
+-- with EXECUTE granted to PUBLIC, so it is taken away and given back to the one
+-- role the endpoint runs as. The six-argument function keeps the grants 001
+-- gave it and is not mentioned here — nothing in this file may change how the
+-- live site's call behaves.
 revoke all on function public.create_website_inquiry(uuid, text, text, text, text, text, text, jsonb)
   from public, anon, authenticated;
 grant execute on function public.create_website_inquiry(uuid, text, text, text, text, text, text, jsonb)
-  to service_role;
-
-revoke all on function public.create_website_inquiry(uuid, text, text, text, text, jsonb)
-  from public, anon, authenticated;
-grant execute on function public.create_website_inquiry(uuid, text, text, text, text, jsonb)
   to service_role;
 
 revoke all on function public.normalize_us_state(text) from public, anon, authenticated;
@@ -231,6 +206,15 @@ revoke all on public.inquiries from anon, authenticated;
 revoke all on public.inquiry_items from anon, authenticated;
 
 -- PostgREST caches the schema. Adding a function signature it has not seen
--- makes that cache stale, and the endpoint would answer 503 until it refreshes
--- on its own. This asks for the reload immediately.
+-- makes that cache stale, and calls to the new overload would answer 404 until
+-- it refreshes on its own. This asks for the reload immediately.
 notify pgrst, 'reload schema';
+
+-- ----------------------------------------------------------- afterwards
+-- Not part of getting this live, and not to be run now. Once the new website
+-- is deployed and a real inquiry has been submitted and checked, the old
+-- signature has no callers left and can go in a later migration:
+--
+--   drop function if exists public.create_website_inquiry(uuid, text, text, text, text, jsonb);
+--
+-- Until then it is what keeps the site up.
