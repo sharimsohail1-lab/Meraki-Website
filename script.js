@@ -502,17 +502,44 @@ function renderProduct() {
   pdp.classList.remove('hidden');
   also.classList.remove('hidden');
 
+  /* A different piece means none of the previous piece's gallery state applies
+     — not the viewer's photographs, not its index, not a half-finished swipe,
+     and not a scroll lock left behind by a viewer that was never closed
+     properly. Done here rather than in the router so it holds however the
+     visitor arrived. */
+  if (renderedSlug !== state.slug) {
+    resetGallery();
+    renderedSlug = state.slug;
+  }
+
   var others = PRODUCTS.filter(function (x) { return x.id !== p.id; });
   var shots = p.images;
   if (state.shot >= shots.length) state.shot = 0;
 
+  /* Everything below reuses one <img> across every product the visitor opens,
+     so each render has to hand it over completely rather than write over the
+     parts it happens to touch. The token is what lets a late callback tell
+     whether the element it is about to change is still the one it was fired
+     for. */
+  pdpRender += 1;
+
   var hero = byId('pdp-hero');
   var shot = shots[state.shot];
+
+  hero.dataset.render = String(pdpRender);
+  /* The previous product may have spent its one fallback. This one starts
+     with its own. */
+  delete hero.dataset.srcsetRetried;
+
+  /* srcset before src, and this order is load-bearing. Assigning src runs the
+     selection algorithm immediately, and if the previous product's srcset were
+     still on the element the browser would pick a candidate from it — briefly
+     fetching, and possibly showing, a photograph of a different garment. */
+  if (shot.srcset) { hero.srcset = shot.srcset; hero.sizes = '(max-width:900px) 100vw, 46vw'; }
+  else { hero.removeAttribute('srcset'); hero.removeAttribute('sizes'); }
   hero.src = shot.src;
   hero.alt = shot.alt;
   hero.setAttribute('aria-label', 'View ' + (p.name || 'this piece') + ' larger');
-  if (shot.srcset) { hero.srcset = shot.srcset; hero.sizes = '(max-width:900px) 100vw, 46vw'; }
-  else { hero.removeAttribute('srcset'); hero.removeAttribute('sizes'); }
 
   /* One photograph needs no thumbnail strip. Hiding the container rather than
      just emptying it also removes the gallery's 14px flex gap, which an empty
@@ -820,6 +847,33 @@ function showFormError(message) {
    stays one. */
 var lightbox = { open: false, shots: [], index: 0, returnFocus: null, scrollY: 0 };
 
+/* Which product the PDP is currently rendered for, and a counter that changes
+   on every render. Between them they let anything asynchronous work out
+   whether the page still belongs to it. */
+var renderedSlug = null;
+var pdpRender = 0;
+var touchStart = null;
+
+/* Hand the gallery over to a different product.
+ *
+ * Called on every change of piece, whether or not the viewer was closed
+ * properly — the point is that it cannot be left holding photographs of a
+ * garment that is no longer on screen. Safe to call when nothing is open. */
+function resetGallery() {
+  if (lightbox.open) closeLightbox();
+  else if (document.body.style.position === 'fixed') unlockPageScroll();   /* left locked somehow */
+
+  lightbox.shots = [];
+  lightbox.index = 0;
+  lightbox.returnFocus = null;
+  touchStart = null;
+
+  var img = byId('lb-img');
+  if (img) { img.removeAttribute('src'); img.removeAttribute('srcset'); img.alt = ''; }
+  byId('lightbox').classList.add('hidden');
+  byId('lb-count').textContent = '';
+}
+
 function lbEl(id) { return byId(id); }
 
 /* iOS ignores `overflow:hidden` on body often enough to be unreliable, so the
@@ -941,8 +995,8 @@ document.addEventListener('keydown', function (e) {
 });
 
 /* Swipe between photographs. Deliberately crude: one axis, one threshold, and
-   it defers to a vertical gesture so panning a zoomed image still works. */
-var touchStart = null;
+   it defers to a vertical gesture so panning a zoomed image still works.
+   Declared with the rest of the viewer's state so resetGallery can clear it. */
 byId('lb-stage').addEventListener('touchstart', function (e) {
   if (e.touches.length !== 1) { touchStart = null; return; }   /* a pinch, leave it alone */
   touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -1276,6 +1330,19 @@ document.addEventListener('error', function (e) {
   var img = e.target;
   if (!img || img.tagName !== 'IMG') return;
   if (!img.getAttribute('srcset') || img.dataset.srcsetRetried) return;
+
+  /* Three ways an error can arrive for a load nobody is waiting for any more,
+     and acting on any of them would damage whatever is on screen now.
+
+     Detached: the element belonged to a grid that has since been rebuilt. */
+  if (!img.isConnected) return;
+  /* Already showing a photograph: the failure was for an earlier load that has
+     since been superseded, and this element is fine. */
+  if (img.complete && img.naturalWidth > 0) return;
+  /* The shared PDP photograph, carrying a different product than the one this
+     event was fired for. */
+  if (img.dataset.render && img.dataset.render !== String(pdpRender)) return;
+
   img.dataset.srcsetRetried = '1';
   if (window.console && console.warn) {
     console.warn('Image candidate failed; falling back to the master:', img.currentSrc || img.src);
