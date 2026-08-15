@@ -84,20 +84,89 @@ function formatPrice(value, currency) {
   }
 }
 
-/* "img/sm/p1.webp 560w, img/p1.webp 1400w" from { 560: …, 1400: … }.
+/* srcset has its own grammar: candidates are comma-separated and, inside a
+   candidate, whitespace separates the URL from its descriptor. A URL carrying
+   either character therefore cannot be written literally — it has to be
+   percent-encoded, or the candidate list is misparsed.
 
-   Falls back to the generated IMG_SRCSET for the local fixture photography, so
-   the renditions this repo already ships keep being used without duplicating
-   the generator's output into the fixtures. A remote image carrying its own
-   `variants` needs neither. An image with neither simply renders from `src`. */
-function srcsetFrom(variants, src) {
+   Only literal spaces and commas are touched, so a URL that already arrives
+   percent-encoded is left exactly as it is rather than double-encoded. */
+function srcsetSafeUrl(url) {
+  return String(url).replace(/\s/g, '%20').replace(/,/g, '%2C');
+}
+
+/* The real pixel width of a rendition.
+
+   The app keys its renditions by the LONGEST SIDE it targeted, not by the
+   width of the file it produced. For a portrait photograph those are very
+   different things: the "1400" rendition of a 937x1679 master is 781x1400, not
+   1400 wide. Emitting `… 1400w` for a 781px file tells the browser it is
+   getting nearly twice the detail it actually gets, and the browser then
+   settles for a file far too small for the slot.
+
+   A `w` descriptor must state the file's real width, so it is derived here
+   from the master's aspect ratio. The clamp is what makes the derivation safe:
+   the app never upscales, so no rendition can be wider than its master. If the
+   longest-side reading is ever wrong for some image, this understates rather
+   than overstates — and understating makes a browser pick a LARGER file, which
+   costs bytes rather than sharpness. */
+function variantWidth(key, masterW, masterH) {
+  if (!(masterW > 0) || !(masterH > 0) || !(key > 0)) return null;
+  var w = masterH > masterW ? Math.round(key * masterW / masterH) : key;
+  return Math.max(1, Math.min(w, masterW));
+}
+
+/* "…/560.webp 313w, …/960.webp 536w, …/master.webp 937w".
+ *
+ * The master is included as a candidate on purpose. Once a srcset exists the
+ * browser chooses only from it, so without the master the widest thing on
+ * offer for Steel Grey would be 781px — narrower than a desktop gallery needs,
+ * and guaranteed to look soft no matter how honest the other descriptors are.
+ *
+ * Descriptors can only be derived when the master's dimensions are known. If
+ * they are not, no srcset is emitted at all and `src` — the master — serves.
+ * Heavier, but never a lie about how much detail a file holds.
+ *
+ * Falls back to the generated IMG_SRCSET for the local editorial photography,
+ * whose renditions really are keyed by width. */
+function srcsetFrom(variants, src, masterW, masterH) {
   if (variants) {
-    var widths = Object.keys(variants)
+    var keys = Object.keys(variants)
       .map(Number)
-      .filter(function (w) { return w > 0 && !blank(variants[w]); })
+      .filter(function (k) { return k > 0 && !blank(variants[k]); })
       .sort(function (a, b) { return a - b; });
-    if (widths.length) {
-      return widths.map(function (w) { return variants[w] + ' ' + w + 'w'; }).join(', ');
+
+    if (keys.length) {
+      var parts = [];
+      var seenWidth = {};
+      var seenUrl = {};
+      var add = function (url, width) {
+        /* Two candidates sharing a width is invalid srcset; after clamping to
+           the master, small masters can collapse several keys onto one. And a
+           rendition whose URL is simply the master — which happens when the
+           app had nothing to downscale — must not be offered twice at two
+           different widths, since only one of them can be true. */
+        if (!width || blank(url) || seenWidth[width]) return;
+        var safe = srcsetSafeUrl(url);
+        if (seenUrl[safe]) return;
+        seenWidth[width] = true;
+        seenUrl[safe] = true;
+        parts.push(safe + ' ' + width + 'w');
+      };
+
+      /* The master goes in first because its width is known outright rather
+         than derived, so if a rendition turns out to be the master under
+         another name the authoritative number is the one that survives. */
+      add(src, masterW > 0 ? Math.round(masterW) : null);
+      keys.forEach(function (k) { add(variants[k], variantWidth(k, masterW, masterH)); });
+
+      /* Ascending by width: the browser does not care, but a human reading
+         View Source does. */
+      parts.sort(function (a, b) {
+        return parseInt(a.split(' ').pop(), 10) - parseInt(b.split(' ').pop(), 10);
+      });
+      if (parts.length > 1) return parts.join(', ');
+      return '';   /* nothing to choose between: let src serve */
     }
   }
   return IMG_SRCSET[src] || '';
@@ -117,7 +186,7 @@ function mapImages(list, fallbackAlt) {
         height: img.height || null,
         isPrimary: img.is_primary === true,
         order: typeof img.sort_order === 'number' ? img.sort_order : i,
-        srcset: srcsetFrom(img.variants, img.src)
+        srcset: srcsetFrom(img.variants, img.src, img.width, img.height)
       };
     })
     .filter(function (img) { return !blank(img.src); });
@@ -1027,6 +1096,30 @@ function renderCopyrightYear() {
   var el = byId('copyright-year');
   if (el) el.textContent = String(new Date().getFullYear());
 }
+
+/* A candidate chosen from srcset that fails to load does NOT make the browser
+   fall back to src — the element just goes broken. Every image here has a valid
+   master in src, so one retry without srcset is the difference between a
+   question mark and the photograph.
+ *
+ * Retried once and only once, and nothing is swallowed: if the master fails too
+ * the image stays visibly broken, which is a real failure worth seeing. Error
+ * events do not bubble, so this listens in the capture phase. */
+document.addEventListener('error', function (e) {
+  var img = e.target;
+  if (!img || img.tagName !== 'IMG') return;
+  if (!img.getAttribute('srcset') || img.dataset.srcsetRetried) return;
+  img.dataset.srcsetRetried = '1';
+  if (window.console && console.warn) {
+    console.warn('Image candidate failed; falling back to the master:', img.currentSrc || img.src);
+  }
+  img.removeAttribute('srcset');
+  img.removeAttribute('sizes');
+  /* Reassigning src is what restarts the load now that the candidate list is
+     gone; without it the element keeps its failed state. */
+  var src = img.getAttribute('src');
+  if (src) img.src = src;
+}, true);
 
 window.addEventListener('hashchange', route);
 renderCopyrightYear();
