@@ -507,6 +507,10 @@ function renderProduct() {
 /* ---------- inquiry ---------- */
 var BAG_KEY = 'meraki.inquiry.v1';
 
+/* True while a submission is in flight. Read by renderBag so the button cannot
+   be re-enabled underneath a request that is still running. */
+var submitting = false;
+
 function saveBag() {
   try { localStorage.setItem(BAG_KEY, JSON.stringify(state.bag)); } catch (e) { /* private mode */ }
 }
@@ -571,32 +575,165 @@ function renderBag() {
 
   var submit = byId('inq-submit');
   submit.dataset.ready = String(n > 0);
-  submit.disabled = n === 0;
+  /* Never re-enable mid-flight: renderBag runs for reasons unrelated to the
+     submission, and an enabled button during a request invites a second one. */
+  submit.disabled = n === 0 || submitting;
 }
 
-/* Everything the atelier needs to answer an inquiry. Kept in one place so that
-   whatever we point it at later — Supabase, WhatsApp, email — reads the same
-   shape. The id identifies the piece; the slug is included only so a human
-   reading the record can find the page. See the README. */
+/* Everything the atelier needs to answer an inquiry, in the shape
+   POST /api/inquiries expects.
+
+   Deliberately thin: product ids and the requested size, nothing else. Name,
+   sku, slug and price are re-read from the database server-side, because a
+   payload that has been sitting in a browser tab — or edited by hand — is a
+   request, not a source of truth. The id identifies the piece; everything
+   descriptive is the server's to decide. */
 function inquiryPayload(form) {
   return {
-    submittedAt: new Date().toISOString(),
-    name: form.name.value.trim(),
-    phone: form.phone.value.trim(),
-    email: form.email.value.trim(),
-    note: form.note.value.trim(),
+    client_submission_id: submissionId(),
+    customer: {
+      name: form.name.value.trim(),
+      phone: form.phone.value.trim(),
+      email: form.email.value.trim(),
+      note: form.note.value.trim()
+    },
     items: state.bag.map(function (b) {
       var p = findBagProduct(b.id);
       return {
-        id: p ? p.id : b.id,
-        slug: p ? p.slug : null,
-        sku: p ? p.sku : null,
-        name: p ? p.name : null,
-        size: b.size,
-        price: p ? p.price : null
+        product_id: p ? p.id : b.id,
+        /* Normally null — the size selector is hidden. A bag saved before that
+           still carries one, and it travels as written. */
+        requested_size: blank(b.size) ? null : String(b.size)
       };
     })
   };
+}
+
+/* ---------- inquiry submission ---------- */
+
+/* One id per submission *attempt*, held across retries on purpose. If the
+   network drops after the server has committed, the customer's retry carries
+   the same id, the unique constraint catches it, and they get the original
+   inquiry back instead of a second one landing in Saima's inbox. Cleared only
+   once a submission has actually succeeded. */
+var SUBMISSION_KEY = 'meraki.inquiry.submission';
+var currentSubmissionId = null;
+
+function uuidv4() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  /* Older Safari. getRandomValues is available far earlier than randomUUID. */
+  var b = new Uint8Array(16);
+  (window.crypto || {}).getRandomValues
+    ? crypto.getRandomValues(b)
+    : (function () { for (var i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256); })();
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  var h = [];
+  for (var i = 0; i < 16; i++) h.push((b[i] + 0x100).toString(16).slice(1));
+  return h.slice(0, 4).join('') + '-' + h.slice(4, 6).join('') + '-' + h.slice(6, 8).join('') +
+    '-' + h.slice(8, 10).join('') + '-' + h.slice(10, 16).join('');
+}
+
+function submissionId() {
+  if (!currentSubmissionId) {
+    /* Survives a reload mid-retry, so a customer who refreshes after a timeout
+       still deduplicates against the attempt that may have landed. */
+    try { currentSubmissionId = localStorage.getItem(SUBMISSION_KEY) || null; } catch (e) {}
+    if (!currentSubmissionId) {
+      currentSubmissionId = uuidv4();
+      try { localStorage.setItem(SUBMISSION_KEY, currentSubmissionId); } catch (e) {}
+    }
+  }
+  return currentSubmissionId;
+}
+
+function retireSubmissionId() {
+  currentSubmissionId = null;
+  try { localStorage.removeItem(SUBMISSION_KEY); } catch (e) {}
+}
+
+/* ---------- validation ---------- */
+
+/* US only for now. The customer types whatever shape feels natural and it is
+   reduced to one canonical form here; the same rule runs again server-side,
+   which is the one that counts. Returns '+1XXXXXXXXXX' or null. */
+function normalizeUsPhone(raw) {
+  if (blank(raw)) return null;
+  var s = String(raw).trim();
+  if (s.length > 40) return null;
+  if (/[a-z]/i.test(s)) return null;              /* letters, extensions */
+  if (/[^0-9+()\-.\s]/.test(s)) return null;
+  var digits = s.replace(/\D/g, '');
+  if (digits.length === 11 && digits.charAt(0) === '1') digits = digits.slice(1);
+  if (digits.length !== 10) return null;
+  if (/^[01]/.test(digits) || /^[01]/.test(digits.slice(3))) return null;
+  return '+1' + digits;
+}
+
+var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function setFieldError(name, message) {
+  var el = byId('err-' + name);
+  var input = $('#inquiry-form [name="' + name + '"]');
+  if (el) {
+    el.textContent = message || '';
+    el.classList.toggle('hidden', !message);
+  }
+  if (input) {
+    /* Not colour alone: the message is real text beside the field, and the
+       state is announced. */
+    if (message) input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
+  }
+}
+
+function clearFieldErrors() {
+  ['name', 'phone', 'email', 'note'].forEach(function (n) { setFieldError(n, ''); });
+  var box = byId('inq-error');
+  if (box) { box.textContent = ''; box.classList.add('hidden'); }
+}
+
+/* Returns the first invalid field name, or null. Messages say what to do rather
+   than what went wrong. */
+function validateInquiryForm(form) {
+  clearFieldErrors();
+  var first = null;
+  var fail = function (n, m) { setFieldError(n, m); if (!first) first = n; };
+
+  if (blank(form.name.value)) fail('name', 'Please tell us your name.');
+
+  if (blank(form.phone.value)) fail('phone', 'Please add a phone number so we can reach you.');
+  else if (!normalizeUsPhone(form.phone.value)) fail('phone', 'Enter a valid 10-digit U.S. phone number.');
+
+  if (!blank(form.email.value) && !EMAIL_RE.test(form.email.value.trim().toLowerCase())) {
+    fail('email', 'This email address doesn\'t look right.');
+  }
+
+  if (form.note.value.length > 2000) fail('note', 'Please keep this under 2000 characters.');
+
+  return first;
+}
+
+function focusField(name) {
+  var input = $('#inquiry-form [name="' + name + '"]');
+  if (!input) return;
+  try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
+  if (input.scrollIntoView) input.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+function setSubmitting(on) {
+  var btn = byId('inq-submit');
+  if (!btn) return;
+  btn.disabled = on || state.bag.length === 0;
+  btn.dataset.sending = String(on);
+  btn.textContent = on ? 'Sending…' : 'Request these looks';
+}
+
+function showFormError(message) {
+  var box = byId('inq-error');
+  if (!box) return;
+  box.textContent = message;
+  box.classList.remove('hidden');
 }
 
 /* ---------- routing ---------- */
@@ -667,22 +804,84 @@ document.addEventListener('click', function (e) {
   }
 });
 
+var INQUIRIES_ENDPOINT = '/api/inquiries';
+
+/* The bag is cleared and the thank-you shown only after the server has
+   confirmed. A failure leaves everything exactly as the customer left it —
+   their looks, their typed answers — so retrying costs them nothing. */
 byId('inquiry-form').addEventListener('submit', function (e) {
   e.preventDefault();
-  if (!state.bag.length) return;
+  var form = e.target;
 
-  var payload = inquiryPayload(e.target);
+  if (submitting || !state.bag.length) return;
 
-  /* Nothing is sent anywhere yet. This is the single seam to wire up later —
-     the thank-you screen below is already the success state. */
-  if (window.console && console.info) console.info('Inquiry (not yet sent anywhere):', payload);
+  var invalid = validateInquiryForm(form);
+  if (invalid) { focusField(invalid); return; }
 
-  state.sent = true;
-  state.bag = [];
-  saveBag();
-  e.target.reset();
-  renderBag();
-  route();
+  submitting = true;
+  setSubmitting(true);
+
+  var payload = inquiryPayload(form);
+
+  fetch(INQUIRIES_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(payload)
+  })
+    .then(function (res) {
+      return res.json().catch(function () { return null; }).then(function (data) {
+        return { status: res.status, ok: res.ok, data: data };
+      });
+    })
+    .then(function (r) {
+      if (!r.ok || !r.data || r.data.ok !== true) throw r;
+
+      /* Committed. Only now is anything thrown away — and the submission id is
+         retired so the next inquiry starts a new one. */
+      retireSubmissionId();
+      state.sent = true;
+      state.bag = [];
+      saveBag();
+      form.reset();
+      clearFieldErrors();
+      renderBag();
+      route();
+    })
+    .catch(function (r) {
+      /* The bag survives, the form keeps its values, and the same submission id
+         is reused on the next attempt. */
+      var code = r && r.data && r.data.error;
+      showFormError(
+        code === 'invalid_phone' ? 'Enter a valid 10-digit U.S. phone number.'
+        : code === 'invalid_email' ? 'This email address doesn\'t look right.'
+        : code === 'name_required' ? 'Please tell us your name.'
+        : code === 'product_unavailable' ? 'One of these pieces is no longer available. Please remove it and try again.'
+        : code === 'too_many_requests' ? 'That was a lot of tries at once. Please wait a moment and send again.'
+        : 'We couldn\'t send your inquiry just now. Please try again in a moment.');
+      if (code === 'invalid_phone') { setFieldError('phone', 'Enter a valid 10-digit U.S. phone number.'); focusField('phone'); }
+      if (code === 'invalid_email') { setFieldError('email', 'This email address doesn\'t look right.'); focusField('email'); }
+    })
+    .then(function () {
+      submitting = false;
+      setSubmitting(false);
+    });
+});
+
+/* Validate on the way out of a field rather than on every keystroke: nobody
+   wants to be told their phone number is wrong while they are still typing it. */
+['name', 'phone', 'email'].forEach(function (name) {
+  var input = $('#inquiry-form [name="' + name + '"]');
+  if (!input) return;
+  input.addEventListener('blur', function () {
+    if (blank(input.value)) { if (name !== 'email') setFieldError(name, ''); return; }
+    if (name === 'phone' && !normalizeUsPhone(input.value)) {
+      setFieldError('phone', 'Enter a valid 10-digit U.S. phone number.');
+    } else if (name === 'email' && !EMAIL_RE.test(input.value.trim().toLowerCase())) {
+      setFieldError('email', 'This email address doesn\'t look right.');
+    } else {
+      setFieldError(name, '');
+    }
+  });
 });
 
 /* Fetch the published catalogue and hand every product through the same
