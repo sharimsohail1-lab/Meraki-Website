@@ -66,12 +66,20 @@
       <img src="img/p5.webp"
            srcset="img/sm/p5.webp 560w, img/md/p5.webp 960w, img/p5.webp 1400w"
            sizes="(max-width:940px) 100vw, 53vw"
-           alt="Meraki look — Mehr, rose pink silk with a saffron chiffon dupatta"
+           alt="A Meraki look — rose pink silk with a saffron chiffon dupatta"
            fetchpriority="high" decoding="async">
-      <!-- Filled from the catalogue by script.js (HERO_SLUG), so it can never
-           drift from what the product page says. Hidden if that piece is not
-           published. The photograph above stays in the markup so the preload
-           scanner can still find it for LCP. -->
+      <!-- The alt describes what is visible in this photograph and names no
+           product on purpose: script.js replaces both the image and the alt
+           when a featured piece is set, and a garment name written here would
+           go on describing a piece that may not be the one on screen — or may
+           no longer be in the catalogue at all.
+
+           The caption below is filled from the catalogue via the featured
+           product in Website Settings, so it cannot contradict the product
+           page. Caption and photograph move together: if the featured piece
+           has no usable image, neither changes and no caption is shown. The
+           photograph stays in the markup so the preload scanner can find it
+           for LCP. -->
       <div class="hero-tag hidden" id="hero-tag">
         <p id="hero-name"></p>
         <p id="hero-status"></p>

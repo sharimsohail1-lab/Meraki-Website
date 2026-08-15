@@ -143,9 +143,11 @@ function mapProduct(raw) {
     availability: raw.availability || 'made_to_order',
     availabilityLabel: avail.label,
     dot: avail.dot,
-    /* Only ever what the app actually says about fulfilment. Absent means the
-       line is not rendered at all — silence rather than a guess. */
-    delivery: blank(raw.fulfillment_note) ? '' : String(raw.fulfillment_note).trim(),
+    /* The piece's own note, exactly as the app stores it. Kept raw: what the
+       page actually shows is resolved at render time by
+       getEffectiveFulfillment(), because it may depend on a global setting
+       that arrives separately. Nothing is ever written back. */
+    fulfillmentNote: blank(raw.fulfillment_note) ? '' : String(raw.fulfillment_note).trim(),
     /* May legitimately be empty: the size selector then hides itself and the
        piece can still be added to an inquiry without one. */
     sizes: sizes,
@@ -157,6 +159,33 @@ function mapProduct(raw) {
 
 function mapProducts(list) {
   return (list || []).map(mapProduct).filter(Boolean);
+}
+
+/* What the page should say about timing for one piece, right now.
+ *
+ * Two sources, and the piece's own note always wins:
+ *
+ *   ready_now      note → the note;  blank → nothing. The global made-to-order
+ *                  lead time is a promise about making a piece, and a piece
+ *                  that already exists is not being made. It must not apply.
+ *   made_to_order  note → the note;  blank → the global lead time
+ *   both           note → the note;  blank → the global lead time
+ *
+ * Blank on both sides means no line at all, never an empty one.
+ *
+ * Presentation only. The global value is read each time it is needed rather
+ * than copied into the product, so changing the lead time in the app changes
+ * every piece that relies on it, with nothing to migrate and nothing to go
+ * stale. It is deliberately not part of the API contract.
+ */
+function getEffectiveFulfillment(product, settings) {
+  if (!product) return '';
+  if (!blank(product.fulfillmentNote)) return String(product.fulfillmentNote).trim();
+  /* Only ready_now is excluded, so an unrecognised availability falls back the
+     same way mapProduct's label does — made to order. */
+  if (product.availability === 'ready_now') return '';
+  var lead = settings && settings.made_to_order_lead_time;
+  return blank(lead) ? '' : String(lead).trim();
 }
 
 /* Where the published catalogue and the operational settings are read from.
@@ -269,29 +298,67 @@ function featuredProduct() {
   return blank(SETTINGS.featured_product_id) ? null : findProduct(SETTINGS.featured_product_id);
 }
 
-/* The photograph follows the caption. index.html ships a still image so the
-   preload scanner has something to fetch for LCP, but once the featured piece
-   resolves the hero must show *that* piece — a caption naming one garment over
-   a photograph of another is worse than either alone. Swapped only when the
-   source actually differs, so the common case costs nothing. */
+/* The editorial photograph exactly as index.html shipped it, captured before
+   anything can overwrite it so the hero can always be put back. Without this
+   the swap is one-way: once a product photograph is in place, a later render
+   that has no product to show leaves the wrong garment on screen. */
+var HERO_EDITORIAL = null;
+
+function heroImg() { return $('.hero-img img'); }
+
+function captureHeroEditorial() {
+  var img = heroImg();
+  if (!img || HERO_EDITORIAL) return;
+  HERO_EDITORIAL = {
+    src: img.getAttribute('src'), srcset: img.getAttribute('srcset'),
+    sizes: img.getAttribute('sizes'), alt: img.getAttribute('alt')
+  };
+}
+
+function setHeroImage(shot) {
+  var img = heroImg();
+  if (!img || !shot || blank(shot.src)) return;
+  if (img.getAttribute('src') === shot.src) return;   /* already right; don't refetch */
+  img.src = shot.src;
+  img.alt = shot.alt || '';
+  if (shot.srcset) { img.srcset = shot.srcset; img.sizes = shot.sizes || '(max-width:940px) 100vw, 53vw'; }
+  else { img.removeAttribute('srcset'); img.removeAttribute('sizes'); }
+}
+
+/* The caption and the photograph move together or not at all.
+ *
+ * Three things could otherwise disagree — the caption, the photograph and the
+ * alt text — and any two of them naming different garments is worse than
+ * showing no caption. So there are exactly two safe states:
+ *
+ *   a featured piece that resolves AND has a photograph → its caption, its
+ *   photograph, its alt
+ *
+ *   anything else → the editorial photograph with its own alt, no caption
+ *
+ * A featured piece with no usable image is not a partial success; it falls
+ * back completely. */
 function renderHero() {
   var tag = byId('hero-tag');
   if (!tag) return;
-  var p = featuredProduct();
+  captureHeroEditorial();
 
-  tag.classList.toggle('hidden', !p);
-  if (!p) return;
+  var p = featuredProduct();
+  var shot = (p && p.images.length && !blank(p.images[0].src)) ? p.images[0] : null;
+  var safe = !!(p && shot);
+
+  tag.classList.toggle('hidden', !safe);
+
+  if (!safe) {
+    byId('hero-name').textContent = '';
+    byId('hero-status').textContent = '';
+    setHeroImage(HERO_EDITORIAL);
+    return;
+  }
 
   byId('hero-name').textContent = p.name;
   byId('hero-status').textContent = p.availabilityLabel;
-
-  var img = $('.hero-img img');
-  var shot = p.images[0];
-  if (!img || !shot || blank(shot.src) || img.getAttribute('src') === shot.src) return;
-  img.src = shot.src;
-  img.alt = shot.alt;
-  if (shot.srcset) { img.srcset = shot.srcset; img.sizes = '(max-width:940px) 100vw, 53vw'; }
-  else { img.removeAttribute('srcset'); img.removeAttribute('sizes'); }
+  setHeroImage(shot);
 }
 
 /* "12 pieces · sizes 38–46 and custom". The size clause is Saima's, from
@@ -371,11 +438,14 @@ function renderProduct() {
   byId('pdp-dot').style.background = p.dot;
   byId('pdp-desc').textContent = p.description;
 
-  /* No fulfilment note published means no line — an empty <p> would still take
-     its place in the flex column and leave a gap under the button. */
+  /* Nothing to say about timing means no line — an empty <p> would still take
+     its place in the flex column and leave a gap under the button. The helper
+     returns '' rather than null or undefined, so nothing can reach the page as
+     the word "undefined". */
   var deliveryEl = byId('pdp-delivery');
-  deliveryEl.textContent = p.delivery;
-  deliveryEl.classList.toggle('hidden', blank(p.delivery));
+  var delivery = getEffectiveFulfillment(p, SETTINGS);
+  deliveryEl.textContent = delivery;
+  deliveryEl.classList.toggle('hidden', blank(delivery));
 
   /* A piece with no published sizes shows no size control at all. Not an empty
      row, and emphatically not a fabricated "Custom" button — the app decides
