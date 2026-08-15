@@ -93,6 +93,10 @@
       <a class="textlink" href="#/collection">All pieces</a>
     </div>
     <div class="grid" id="featured-grid"></div>
+    <!-- The homepage deliberately shows only a few pieces; this is the way on
+         to the rest of them rather than a dead end. Same routing as every other
+         link on the site. -->
+    <div class="more-wrap"><button class="more" data-nav="#/collection">See more<span aria-hidden="true">→</span></button></div>
   </section>
 
   <section class="split" id="story">
@@ -162,7 +166,10 @@
       <!-- No src here on purpose: this view is hidden on load and script.js sets
            the photograph when a product is opened. A hardcoded src would make
            every visitor download a full-size photo they may never see. -->
-      <div class="main"><img id="pdp-hero" alt="Meraki look" decoding="async"></div>
+      <!-- Button semantics on the photograph itself: it opens the viewer, so it
+           has to be reachable and operable by keyboard like any other control. -->
+      <div class="main"><img id="pdp-hero" alt="Meraki look" decoding="async"
+           role="button" tabindex="0" aria-label="View this piece larger"></div>
       <div class="thumbs" id="pdp-thumbs"></div>
     </div>
     <div class="pdp-info">
@@ -187,6 +194,7 @@
   <div class="also">
     <p>You may also like</p>
     <div class="grid small" id="pdp-related"></div>
+    <div class="more-wrap"><button class="more" data-nav="#/collection">See more<span aria-hidden="true">→</span></button></div>
   </div>
 </div>
 
@@ -267,6 +275,26 @@
   </div>
   <p class="copyright">© <span id="copyright-year">2026</span> Meraki by Saima</p>
 </footer>
+
+<!-- Product photography, close up. Empty until a gallery image is opened, so
+     nothing here is downloaded by a visitor who never opens it. The image is
+     the master rather than a rendition: the whole point is inspecting
+     embroidery, and the master is the only source that holds it. -->
+<div class="lb hidden" id="lightbox" role="dialog" aria-modal="true" aria-label="Product photograph">
+  <button class="lb-close" id="lb-close" type="button" aria-label="Close">
+    <span aria-hidden="true">&times;</span>
+  </button>
+  <button class="lb-nav lb-prev hidden" id="lb-prev" type="button" aria-label="Previous photograph">
+    <span aria-hidden="true">&lsaquo;</span>
+  </button>
+  <div class="lb-stage" id="lb-stage">
+    <img id="lb-img" alt="" decoding="async">
+  </div>
+  <button class="lb-nav lb-next hidden" id="lb-next" type="button" aria-label="Next photograph">
+    <span aria-hidden="true">&rsaquo;</span>
+  </button>
+  <p class="lb-count" id="lb-count" aria-live="polite"></p>
+</div>
 
 <script src="script.js"></script>
 </body>

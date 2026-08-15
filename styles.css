@@ -225,6 +225,56 @@ footer{border-top:1px solid rgba(42,31,34,.11);padding:clamp(44px,5vw,72px) var(
 .fcol .head{margin:0 0 4px;font:300 10px/1 var(--sans);letter-spacing:.2em;text-transform:uppercase;color:var(--soft)}
 .fcol a,.fcol .line{font:300 13px/1.7 var(--sans);color:var(--ink);margin:0}
 .copyright{margin:0;font:300 11px/1 var(--sans);letter-spacing:.14em;color:var(--faint)}
+/* ---------- see more ---------- */
+/* An editorial way onward rather than a shop button: the site's uppercase
+   micro-type, a hairline that firms up on hover, and a tap target that clears
+   44px without looking like one. */
+.more-wrap{display:flex;justify-content:center;margin-top:clamp(38px,5vw,64px)}
+.more{appearance:none;background:transparent;border:none;cursor:pointer;
+  display:inline-flex;align-items:center;gap:12px;padding:16px 4px;min-height:48px;
+  font:400 10.5px/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:var(--ink);
+  border-bottom:1px solid rgba(42,31,34,.28);transition:border-color .25s,color .25s,gap .25s}
+.more:hover{border-bottom-color:var(--ink);color:var(--plum);gap:16px}
+.more:focus-visible{outline:2px solid var(--plum);outline-offset:6px}
+.more span{font-size:13px;line-height:1}
+
+/* ---------- image viewer ---------- */
+/* Understated rather than a black box: the site's own ground colour, deepened,
+   so the photograph sits in the same world as the rest of the page. */
+.lb{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
+  background:rgba(28,20,22,.975);padding:clamp(12px,3vw,40px)}
+.lb-stage{flex:1 1 auto;height:100%;display:flex;align-items:center;justify-content:center;
+  /* auto, not hidden: a pinch-zoomed photograph has somewhere to be panned to */
+  overflow:auto;-webkit-overflow-scrolling:touch}
+/* contain, never cover — cropping the embroidery is the one thing this must
+   not do. The master is loaded at full size and simply fitted. */
+.lb-stage img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;
+  display:block;margin:auto}
+
+.lb-close,.lb-nav{position:absolute;appearance:none;cursor:pointer;color:var(--ground);
+  background:rgba(28,20,22,.35);border:1px solid rgba(251,248,244,.28);border-radius:999px;
+  display:flex;align-items:center;justify-content:center;
+  width:48px;height:48px;transition:background .25s,border-color .25s}
+.lb-close:hover,.lb-nav:hover{background:rgba(28,20,22,.6);border-color:rgba(251,248,244,.6)}
+.lb-close:focus-visible,.lb-nav:focus-visible{outline:2px solid var(--ground);outline-offset:3px}
+.lb-close{top:clamp(10px,2vw,22px);right:clamp(10px,2vw,22px);font-size:26px;line-height:1;z-index:2}
+.lb-nav{top:50%;transform:translateY(-50%);font-size:30px;line-height:1;z-index:2}
+.lb-prev{left:clamp(8px,2vw,26px)}
+.lb-next{right:clamp(8px,2vw,26px)}
+.lb-count{position:absolute;bottom:clamp(12px,2.4vw,26px);left:0;right:0;margin:0;text-align:center;
+  font:300 10px/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:rgba(251,248,244,.72)}
+
+/* The gallery photographs advertise that they open. */
+#pdp-hero{cursor:zoom-in}
+#pdp-thumbs button{cursor:zoom-in}
+
+@media(max-width:640px){
+  /* Out of the way of the picture, and still comfortably reachable. */
+  .lb{padding:8px}
+  .lb-nav{width:44px;height:44px;top:auto;bottom:52px;transform:none}
+  .lb-count{bottom:18px}
+}
+
 .hidden{display:none!important}
 /* A button that cannot be pressed should not offer a pointer. Colours are already
    set explicitly above, so disabling changes nothing else visually. */
