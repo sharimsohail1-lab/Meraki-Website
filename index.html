@@ -74,9 +74,13 @@
         <button class="pill pill-ghost" data-nav="#/ready">Ready now</button>
       </div>
     </div>
-    <!-- The Roselle film, in the slot the hero photograph used to hold. The
-         whole block is the link, so the film and its caption go to the same
-         place a visitor would expect.
+    <!-- The Roselle film, in the slot the hero photograph used to hold.
+
+         The film is deliberately NOT inside a link. When a phone refuses muted
+         autoplay it draws its own play affordance on the video, and a tap on
+         that affordance is a tap on the video: with an anchor wrapped round it
+         the tap navigated away instead of starting playback. Only the caption
+         navigates now, so the browser's own play behaviour is left alone.
 
          The signed Storage URL is written verbatim and expires in about a
          year. It carries no ampersands, so nothing needs entity-escaping, and
@@ -84,15 +88,15 @@
          decoding it would address a different object. The poster is the
          photograph that was already here, so there is no blank rectangle while
          the film loads and no new asset to ship. -->
-    <a class="hero-img hero-film" href="#/collection" aria-label="Roselle Collection — view the collection">
+    <div class="hero-img hero-film">
       <video id="hero-video" poster="img/p5.webp"
              autoplay muted loop playsinline preload="auto"
              disablepictureinpicture disableremoteplayback
              aria-label="The Roselle Collection film">
         <source src="https://mtjfnfwvpqjxddgxlbgx.supabase.co/storage/v1/object/sign/collection-video/Roselle%20V2.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lZTg5NTYyYS1jYjg0LTQzZDAtYWYzOS1iNmJmMjcyNTVlM2IiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJjb2xsZWN0aW9uLXZpZGVvL1Jvc2VsbGUgVjIubXA0Iiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4NjgxOTI3NCwiZXhwIjoxODE4MzU1Mjc0fQ.-Wc_PDFiLWa7pU29ebj9eI3PcHQ4mzVuLzJg9yP1lB8" type="video/mp4">
       </video>
-      <p class="film-tag">Roselle Collection</p>
-    </a>
+      <p class="film-tag"><a class="film-cta" href="#/collection" aria-label="Roselle Collection — view the collection">Roselle Collection</a></p>
+    </div>
   </section>
 
   <section class="section" id="featured">

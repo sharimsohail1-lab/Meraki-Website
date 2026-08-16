@@ -1411,6 +1411,26 @@ function setupHeroFilm() {
     if (query.addEventListener) query.addEventListener('change', apply);
     else if (query.addListener) query.addListener(apply);
   }
+
+  /* A tap on the film plays or pauses it where it stands. The film is no longer
+     inside a link, so this is the only thing a tap can do — it cannot route.
+     Nothing here asks for fullscreen and nothing builds a player: the browser's
+     own inline playback is left to do its job. */
+  var startedAt = 0;
+  video.addEventListener('play', function () { startedAt = Date.now(); });
+
+  video.addEventListener('click', function () {
+    if (video.paused) {
+      var attempt = video.play();
+      if (attempt && attempt.catch) attempt.catch(function () {});
+      return;
+    }
+    /* When a phone refuses autoplay it draws its own play affordance, and the
+       tap that dismisses it both starts playback and reaches this handler.
+       Pausing then would undo the very tap that started the film, so a click
+       arriving on the heels of playback is left alone. */
+    if (Date.now() - startedAt > 400) video.pause();
+  });
 }
 
 setupHeroFilm();
