@@ -1104,6 +1104,27 @@ document.addEventListener('click', function (e) {
 
 var INQUIRIES_ENDPOINT = '/api/inquiries';
 
+/* Meta's Lead event, reported once per inquiry that actually reached the
+   atelier.
+
+   Keyed on the submission id rather than a bare flag, because that id is what
+   makes one *logical* inquiry one thing: it survives retries and a reload
+   mid-retry, so a submission that lands after a dropped connection reports
+   once, not twice.
+
+   Everything here is wrapped: a blocked pixel, an ad blocker, a script that
+   never loaded, or an fbq that throws must not cost the customer their
+   thank-you screen. Analytics is the least important thing on this page. */
+var leadReported = null;
+
+function reportLead(id) {
+  if (!id || leadReported === id) return;
+  leadReported = id;
+  try {
+    if (typeof window.fbq === 'function') window.fbq('track', 'Lead');
+  } catch (e) {}
+}
+
 /* The bag is cleared and the thank-you shown only after the server has
    confirmed. A failure leaves everything exactly as the customer left it —
    their looks, their typed answers — so retrying costs them nothing. */
@@ -1133,6 +1154,11 @@ byId('inquiry-form').addEventListener('submit', function (e) {
     })
     .then(function (r) {
       if (!r.ok || !r.data || r.data.ok !== true) throw r;
+
+      /* Confirmed saved. A duplicate is this same inquiry arriving twice — the
+         customer only enquired once, so Meta hears about it once. The id comes
+         from the payload rather than the global, which is retired just below. */
+      if (r.data.duplicate !== true) reportLead(payload.client_submission_id);
 
       /* Committed. Only now is anything thrown away — and the submission id is
          retired so the next inquiry starts a new one. */
