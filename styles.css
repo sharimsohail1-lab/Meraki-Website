@@ -79,21 +79,34 @@ h1.display em{font-style:italic;color:var(--plum)}
    behaviour and the page below it are unchanged. display:block on the anchor
    stops the inline baseline gap from adding a stripe under it. */
 .hero-film{display:block;overflow:hidden;color:inherit}
-.hero-film:hover{color:inherit}
+/* The film takes the tap itself — play/pause in place, never navigation. The
+   pointer cursor is what the block already showed when it was a link, so the
+   surface reads the same on a desktop. */
 .hero-film video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
-  object-position:50% 28%;display:block;background:var(--stone)}
+  object-position:50% 28%;display:block;background:var(--stone);cursor:pointer}
 /* A phone crops far more aggressively than a wide screen, so the framing moves
    up to keep the garment rather than the floor. */
 @media(max-width:940px){.hero-film video{object-position:50% 22%}}
 
 /* Editorial rather than a banner: the site's own micro-caps, over a gradient
    that only exists where the words are so the film is never dimmed as a whole. */
-.film-tag{position:absolute;left:0;right:0;bottom:0;margin:0;
+/* The gradient is a tall block, and it used to be part of the link. Left
+   clickable it would swallow the lower third of every tap meant for the film,
+   so it takes no pointer events at all — only the words inside it do. */
+.film-tag{position:absolute;left:0;right:0;bottom:0;margin:0;pointer-events:none;
   padding:clamp(56px,9vw,110px) clamp(18px,3vw,34px) clamp(18px,3vw,32px);
   font:400 11px/1 var(--sans);letter-spacing:.3em;text-transform:uppercase;color:#FBF8F4;
   text-shadow:0 1px 14px rgba(24,16,18,.5);
   background:linear-gradient(to top,rgba(24,16,18,.5),rgba(24,16,18,0))}
-.hero-film:focus-visible{outline:2px solid var(--plum);outline-offset:-4px}
+.film-cta{position:relative;display:inline-block;pointer-events:auto;
+  color:inherit;text-decoration:none}
+.film-cta:hover{color:inherit}
+/* The words are 11px tall, which is no tap target. This grows the hit area to
+   a comfortable 44px without touching layout — an absolute box cannot move the
+   caption, so the film looks exactly as it did. */
+.film-cta::after{content:'';position:absolute;left:-14px;right:-14px;
+  top:50%;transform:translateY(-50%);height:44px}
+.film-cta:focus-visible{outline:2px solid #FBF8F4;outline-offset:6px}
 
 /* A visitor who has asked for less motion gets a still frame, not a loop. The
    film is paused in script.js; this keeps it from animating in any other way. */
