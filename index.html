@@ -50,7 +50,16 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
 <header>
   <div class="hdr">
     <nav aria-label="Primary">
-      <a class="navlink" href="#/collection">Collection</a>
+      <!-- The list inside is written by renderCollectionNav() from whatever
+           collections the published catalogue actually contains. No collection
+           name is spelled out anywhere in this file. -->
+      <div class="navmenu" id="collections-menu">
+        <button class="navlink navmenu-btn" id="collections-toggle" type="button"
+                aria-expanded="false" aria-controls="collections-list">
+          Collections<span class="chev" aria-hidden="true"></span>
+        </button>
+        <ul class="navmenu-list hidden" id="collections-list"></ul>
+      </div>
       <a class="navlink" href="#/ready">Ready Now</a>
       <a class="navlink" href="#/made-to-order">Made to Order</a>
       <a class="navlink" href="#/story">Our Story</a>
@@ -73,11 +82,17 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
     </div>
   </div>
   <nav class="mobnav" aria-label="Primary, compact">
-    <a class="navlink" href="#/collection">Collection</a>
+    <button class="navlink mobnav-btn" id="mob-collections-toggle" type="button"
+            aria-expanded="false" aria-controls="mob-collections-list">
+      Collections<span class="chev" aria-hidden="true"></span>
+    </button>
     <a class="navlink" href="#/ready">Ready Now</a>
     <a class="navlink" href="#/made-to-order">Made to Order</a>
     <a class="navlink" href="#/story">Our Story</a>
   </nav>
+  <!-- Outside the scrolling strip on purpose: .mobnav scrolls horizontally, and
+       a panel inside it would be clipped by that overflow. -->
+  <div class="mobcollections hidden" id="mob-collections-list"></div>
 </header>
 
 <main>
@@ -176,12 +191,20 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
 
 <!-- ============ COLLECTION ============ -->
 <div class="view hidden pagepad" id="view-collection">
-  <h1 class="page">The Collection</h1>
+  <!-- The heading carries the collection's own name on a collection route, and
+       the general title everywhere else. Written by renderGrids(). -->
+  <h1 class="page" id="collection-title">The Collection</h1>
   <p class="subtle" id="collection-count"></p>
   <div class="filters" id="filters" role="group" aria-label="Filter the collection">
     <button data-filter="all" aria-pressed="true">All pieces</button>
     <button data-filter="ready" aria-pressed="false">Ready now</button>
     <button data-filter="mto" aria-pressed="false">Made to order</button>
+  </div>
+  <!-- A collection that has been renamed or retired leaves its links behind in
+       the world. This is what those links land on. -->
+  <div class="empty hidden" id="collection-missing">
+    <p class="body">We couldn’t find that collection. It may have been renamed or retired.</p>
+    <a class="pill pill-ghost" style="padding:14px 28px" href="#/collection">View all collections</a>
   </div>
   <div class="grid" id="collection-grid"></div>
 </div>
