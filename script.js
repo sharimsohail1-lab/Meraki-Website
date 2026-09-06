@@ -294,7 +294,7 @@ var SETTINGS = blankSettings();
    holding a reference to a stale array. */
 var PRODUCTS = [];
 
-var state = { filter:'all', slug:null, size:null, shot:0, bag:[], sent:false };
+var state = { filter:'all', slug:null, collection:null, size:null, shot:0, bag:[], sent:false };
 
 /* Is the catalogue usable yet? 'loading' | 'ready' | 'error'.
 
@@ -365,6 +365,74 @@ function cardHTML(p, small) {
 
 /* 'both' belongs in both lists, so the filters test what a piece can be rather
    than sorting it into one bucket. */
+/* ---------- collections ---------- */
+
+/* A URL-safe form of a collection's name. Deterministic and one-way: the name
+   is what gets displayed, the slug is only ever an address.
+
+   Accents are folded rather than dropped, so "Été" addresses as "ete" instead
+   of collapsing to nothing. Apostrophes close up — "Saima's Edit" is
+   "saimas-edit", not "saima-s-edit" — and every other run of punctuation
+   becomes a single hyphen. A name made entirely of punctuation yields '', and
+   the caller treats that as unaddressable rather than routing to nowhere. */
+function collectionSlug(name) {
+  var s = String(name == null ? '' : name).trim().toLowerCase();
+  if (s.normalize) s = s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+  return s.replace(/['‘’ʼ]/g, '')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+}
+
+/* Every collection the public catalogue actually contains.
+
+   PRODUCTS holds exactly what /api/products returned, and that endpoint admits
+   a row only when it is published and not archived — the guard lives in the
+   query and again in the handler. So "a collection with at least one visible
+   product" needs no second definition here: it is whatever these products say
+   they belong to. A collection whose every piece is unpublished or archived
+   never reaches the browser, and so never reaches this list.
+
+   Deduplicated by slug rather than by name, so two spellings that address the
+   same URL cannot both claim it. First spelling seen wins the display name.
+
+   Ordering is alphabetical by display name, case-insensitively and
+   locale-aware. Nothing in the public payload expresses merchandising
+   priority, and inventing one from creation dates or product counts would be
+   guessing at intent. Alphabetical is the honest default; an app-side phase
+   can supply a real order later. */
+function publicCollections() {
+  var seen = {};
+  var out = [];
+  PRODUCTS.forEach(function (p) {
+    (p.collections || []).forEach(function (raw) {
+      var name = String(raw == null ? '' : raw).trim();
+      if (!name) return;
+      var slug = collectionSlug(name);
+      if (!slug || seen[slug]) return;
+      seen[slug] = true;
+      out.push({ name: name, slug: slug });
+    });
+  });
+  return out.sort(function (a, b) {
+    return a.name.localeCompare(b.name, 'en', { sensitivity: 'base' });
+  });
+}
+
+function findCollectionBySlug(slug) {
+  if (blank(slug)) return null;
+  var want = collectionSlug(slug);
+  return publicCollections().filter(function (c) { return c.slug === want; })[0] || null;
+}
+
+/* Membership is compared by slug so a route resolves the same way the menu
+   built it — no second normalisation rule to drift out of step. */
+function inCollection(p, collection) {
+  if (!collection) return true;
+  return (p.collections || []).some(function (n) {
+    return collectionSlug(n) === collection.slug;
+  });
+}
+
 function matchesFilter(p, filter) {
   if (filter === 'all') return true;
   if (filter === 'ready') return p.availability === 'ready_now' || p.availability === 'both';
@@ -466,13 +534,51 @@ function collectionCount(n) {
   return n + (n === 1 ? ' piece' : ' pieces') + (blank(note) ? '' : ' · ' + note);
 }
 
+/* One item per collection, plus the way back to everything. The markup is
+   identical in both menus; only where it hangs differs. */
+function collectionNavHTML() {
+  var items = publicCollections().map(function (c) {
+    return '<li><a class="navmenu-item" href="#/collection/' + esc(c.slug) + '"'
+      + ' data-collection="' + esc(c.slug) + '">' + esc(c.name) + '</a></li>';
+  });
+  items.push('<li class="navmenu-all"><a class="navmenu-item" href="#/collection">View All</a></li>');
+  return items.join('');
+}
+
+function renderCollectionNav() {
+  var html = collectionNavHTML();
+  var desktop = byId('collections-list');
+  var mobile = byId('mob-collections-list');
+  if (desktop) desktop.innerHTML = html;
+  /* The mobile panel is a plain list too, so one renderer serves both. */
+  if (mobile) mobile.innerHTML = '<ul class="navmenu-list-inner">' + html + '</ul>';
+}
+
 function renderGrids() {
   renderHero();
+  renderCollectionNav();
   byId('featured-grid').innerHTML = PRODUCTS.slice(0, 4).map(function (p) { return cardHTML(p); }).join('');
-  var shown = PRODUCTS.filter(function (p) { return matchesFilter(p, state.filter); });
+
+  var collection = state.collection ? findCollectionBySlug(state.collection) : null;
+  /* Only once the catalogue has actually arrived: while it is loading every
+     slug looks unresolvable, and flashing "not found" at someone whose page is
+     still loading would be a lie. */
+  var missing = !!state.collection && !collection && catalogue.status === 'ready';
+
+  byId('collection-title').textContent = collection ? collection.name : 'The Collection';
+  byId('collection-missing').classList.toggle('hidden', !missing);
+  byId('filters').classList.toggle('hidden', missing);
+  byId('collection-grid').classList.toggle('hidden', missing);
+
+  /* A piece in two collections appears on both pages — and once on each, since
+     it is one entry in PRODUCTS however many collections name it. */
+  var shown = missing ? [] : PRODUCTS.filter(function (p) {
+    return inCollection(p, collection) && matchesFilter(p, state.filter);
+  });
   byId('collection-grid').innerHTML = shown.map(function (p) { return cardHTML(p); }).join('');
   byId('collection-count').textContent =
-    catalogue.status === 'loading' ? 'Loading the collection…'
+    missing ? ''
+    : catalogue.status === 'loading' ? 'Loading the collection…'
     : catalogue.status === 'error' ? 'We couldn’t load the collection. Please try again.'
     : collectionCount(shown.length);
   Array.prototype.forEach.call(byId('filters').children, function (b) {
@@ -1037,7 +1143,15 @@ function route() {
     state.size = null; state.shot = 0;
     renderProduct(); show('product'); window.scrollTo(0, 0); return;
   }
+  /* A collection of its own. The slug is resolved against the live catalogue
+     in renderGrids(), which also handles one that no longer resolves. */
+  if (hash.indexOf('collection/') === 0) {
+    state.collection = decodeURIComponent(hash.slice(11));
+    state.filter = 'all';
+    renderGrids(); show('collection'); window.scrollTo(0, 0); return;
+  }
   if (hash === 'collection' || hash === 'ready' || hash === 'made-to-order') {
+    state.collection = null;
     state.filter = hash === 'ready' ? 'ready' : (hash === 'made-to-order' ? 'mto' : 'all');
     renderGrids(); show('collection'); window.scrollTo(0, 0); return;
   }
@@ -1459,7 +1573,79 @@ function setupHeroFilm() {
   });
 }
 
+/* The Collections menus, desktop and compact.
+
+   Hover opens the desktop one where a pointer can hover, but it is never the
+   only way in: the control is a real button, it toggles on click and on Enter
+   or Space for free, Escape closes it and returns focus, and tabbing out of it
+   closes it behind you. */
+function setupCollectionMenus() {
+  var menus = [
+    { btn: byId('collections-toggle'), panel: byId('collections-list'),
+      wrap: byId('collections-menu'), hover: true },
+    { btn: byId('mob-collections-toggle'), panel: byId('mob-collections-list'),
+      wrap: null, hover: false }
+  ].filter(function (m) { return m.btn && m.panel; });
+
+  if (!menus.length) return;
+
+  function setOpen(m, open) {
+    m.panel.classList.toggle('hidden', !open);
+    m.btn.setAttribute('aria-expanded', String(open));
+  }
+  function closeAll() {
+    menus.forEach(function (m) { m.pinned = false; setOpen(m, false); });
+  }
+  function isOpen(m) { return m.btn.getAttribute('aria-expanded') === 'true'; }
+
+  var canHover = !!(window.matchMedia && window.matchMedia('(hover:hover)').matches);
+
+  menus.forEach(function (m) {
+    setOpen(m, false);
+    /* Hover opens the menu, but a click pins it: without that, hovering would
+       open it and the click that followed would read as "already open" and
+       shut it again — the control would feel broken to the one gesture most
+       people reach for. Pinned, it stays put until it is dismissed. */
+    m.pinned = false;
+
+    m.btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var next = !m.pinned;
+      closeAll();
+      m.pinned = next;
+      setOpen(m, next);
+    });
+
+    if (m.hover && m.wrap && canHover) {
+      m.wrap.addEventListener('mouseenter', function () { if (!m.pinned) setOpen(m, true); });
+      m.wrap.addEventListener('mouseleave', function () { if (!m.pinned) setOpen(m, false); });
+    }
+
+    var region = m.wrap || m.panel;
+    region.addEventListener('focusout', function (e) {
+      var to = e.relatedTarget;
+      if (to && (region.contains(to) || to === m.btn)) return;
+      m.pinned = false;
+      setOpen(m, false);
+    });
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' && e.keyCode !== 27) return;
+    var open = menus.filter(isOpen)[0];
+    if (open) { closeAll(); open.btn.focus(); }
+  });
+
+  /* Anywhere else on the page closes it, and so does going somewhere. */
+  document.addEventListener('click', function (e) {
+    if (menus.some(function (m) { return m.btn.contains(e.target); })) return;
+    closeAll();
+  });
+  window.addEventListener('hashchange', closeAll);
+}
+
 setupHeroFilm();
+setupCollectionMenus();
 
 window.addEventListener('hashchange', route);
 renderCopyrightYear();

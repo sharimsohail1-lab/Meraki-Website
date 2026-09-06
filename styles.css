@@ -61,6 +61,48 @@ header{position:sticky;top:0;z-index:60;background:rgba(251,248,244,.9);
 .mobnav .navlink{padding:11px 0 12px;margin:-11px 0 -12px;display:flex;align-items:center}
 @media(max-width:899px){.hdr nav{display:none}.mobnav{display:flex}}
 
+/* Collections menu. A quiet card in the site's own paper and rule weights —
+   the header stays type, not chrome. */
+.navmenu{position:relative;display:flex;align-items:center}
+/* Both menu controls are buttons, so both need the UA chrome taken off — a
+   default grey button in a header of quiet type reads as a mistake. */
+.navmenu-btn,.mobnav-btn{display:inline-flex;align-items:center;gap:7px;background:none;
+  border:0;padding:0;cursor:pointer;color:var(--ink);font:inherit;
+  letter-spacing:.16em;text-transform:uppercase}
+.navmenu-btn:focus-visible,.mobnav-btn:focus-visible{outline:2px solid var(--plum);outline-offset:4px}
+/* A 5px chevron, drawn from two borders so there is no asset and no icon font. */
+.chev{width:5px;height:5px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;
+  transform:translateY(-2px) rotate(45deg);transition:transform .2s}
+[aria-expanded="true"] .chev{transform:translateY(1px) rotate(-135deg)}
+
+.navmenu-list{position:absolute;top:calc(100% + 15px);left:-18px;z-index:70;
+  min-width:200px;max-width:min(78vw,320px);margin:0;padding:9px 0;list-style:none;
+  background:var(--ground);border:1px solid rgba(42,31,34,.1);
+  box-shadow:0 16px 38px rgba(24,16,18,.10)}
+.navmenu-item{display:block;padding:10px 18px;color:var(--ink);
+  font:400 10.5px/1.45 var(--sans);letter-spacing:.16em;text-transform:uppercase;
+  transition:background .2s}
+.navmenu-item:hover{background:rgba(42,31,34,.045);color:var(--ink)}
+.navmenu-item:focus-visible{outline:2px solid var(--plum);outline-offset:-2px}
+/* "View All" is the way back to everything, so it reads as a footer to the
+   list rather than another collection. */
+.navmenu-all{margin-top:7px;padding-top:6px;border-top:1px solid rgba(42,31,34,.09)}
+.navmenu-all .navmenu-item{color:var(--soft)}
+
+/* The compact panel hangs under the strip rather than inside it: .mobnav
+   scrolls horizontally and would clip anything absolutely placed within. */
+.mobcollections{border-top:1px solid rgba(42,31,34,.06);background:var(--ground);
+  max-height:min(52vh,420px);overflow-y:auto}
+.mobcollections .navmenu-list-inner{margin:0;padding:4px 0 8px;list-style:none}
+.mobcollections .navmenu-item{padding:14px 18px;letter-spacing:.14em}
+/* The strip's links are 37px tall. The control that opens a menu deserves a
+   little more than that under a thumb, and an absolute hit area buys it
+   without moving the strip or its siblings. */
+.mobnav-btn{flex:0 0 auto;position:relative;
+  padding:11px 0 12px;margin:-11px 0 -12px}
+.mobnav-btn::after{content:'';position:absolute;left:-8px;right:-8px;top:50%;
+  transform:translateY(-50%);height:46px}
+
 main{flex:1 1 auto}
 .view{animation:mkIn .45s ease both}
 .pagepad{padding:clamp(34px,5vw,70px) var(--pad) clamp(60px,8vw,110px)}
