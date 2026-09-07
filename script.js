@@ -294,7 +294,7 @@ var SETTINGS = blankSettings();
    holding a reference to a stale array. */
 var PRODUCTS = [];
 
-var state = { filter:'all', slug:null, collection:null, size:null, shot:0, bag:[], sent:false };
+var state = { filter:'all', slug:null, collection:null, edit:null, size:null, shot:0, bag:[], sent:false };
 
 /* Is the catalogue usable yet? 'loading' | 'ready' | 'error'.
 
@@ -554,27 +554,267 @@ function renderCollectionNav() {
   if (mobile) mobile.innerHTML = '<ul class="navmenu-list-inner">' + html + '</ul>';
 }
 
+/* ===========================================================================
+ * HOMEPAGE MERCHANDISING
+ * ===========================================================================
+ *
+ * Everything here is decided in the app and arrives, already validated and with
+ * its CTAs already resolved to real addresses, from /api/site-settings. The
+ * browser never sees a collection id, an edit id, or an href the app wrote.
+ *
+ * The rule that outranks every other rule in this file: a homepage that has
+ * never been merchandised looks exactly as it did before any of this existed.
+ * HOMEPAGE stays null until the endpoint says otherwise, and a block that is
+ * absent from the configuration stays absent rather than being conjured from
+ * its defaults — so configuring a campaign alone changes the hero and nothing
+ * else.
+ */
+var HOMEPAGE = null;
+var CURATED_EDITS = [];
+
+function homepageBlock(name) {
+  return HOMEPAGE && HOMEPAGE[name] ? HOMEPAGE[name] : null;
+}
+
+function findEditBySlug(slug) {
+  if (blank(slug)) return null;
+  var want = String(slug).trim().toLowerCase();
+  /* The stored slug, compared as stored. It is the operator's to edit and
+     survives a title rename, so deriving one from the title here would send
+     people to a page that no longer answers. */
+  return CURATED_EDITS.filter(function (e) {
+    return String(e.slug || '').trim().toLowerCase() === want;
+  })[0] || null;
+}
+
+function findProductById(id) {
+  if (blank(id)) return null;
+  return PRODUCTS.filter(function (p) { return p.id === id; })[0] || null;
+}
+
+/* Newest first. website_published_at is when Saima put it on the site, which is
+   what "new" means to a visitor; created_at is the fallback for a piece that
+   predates the column. */
+function newestFirst(products) {
+  return products.slice().sort(function (a, b) {
+    var av = a.publishedAt || a.createdAt || '';
+    var bv = b.publishedAt || b.createdAt || '';
+    return av < bv ? 1 : av > bv ? -1 : 0;
+  });
+}
+
+/* The pieces a featured edit resolves to, in the order they should appear.
+   Nothing here pads: if four of six chosen pieces are still published, four is
+   the honest answer, and the saved configuration is never rewritten to match. */
+function featuredEditProducts(cfg) {
+  if (!cfg || cfg.show !== true) return [];
+  var out = [];
+
+  if (cfg.source_type === 'collection') {
+    var collection = findCollectionBySlug(cfg.source_collection_slug);
+    /* collection_names already carries only publicly visible memberships of
+       publicly visible collections, so honouring 028's two switches here is
+       simply a matter of using it. */
+    out = collection
+      ? newestFirst(PRODUCTS.filter(function (p) { return inCollection(p, collection); }))
+      : [];
+  } else if (cfg.source_type === 'products') {
+    out = (cfg.product_ids || []).map(findProductById).filter(Boolean);
+  } else {
+    out = newestFirst(PRODUCTS);
+  }
+
+  return out.slice(0, cfg.count > 0 ? cfg.count : 0);
+}
+
+function renderHomeSections() {
+  var edit = homepageBlock('featured_edit');
+  var arrivalsCfg = homepageBlock('new_arrivals');
+
+  /* An absent block is not a decision to hide anything: the section keeps doing
+     what it did before the app knew about it. */
+  var featured = edit ? featuredEditProducts(edit) : PRODUCTS.slice(0, 4);
+  var section = byId('featured');
+
+  section.classList.toggle('hidden', featured.length === 0);
+  byId('featured-grid').innerHTML = featured.map(function (p) { return cardHTML(p); }).join('');
+
+  if (edit && !blank(edit.heading)) byId('featured-title').textContent = edit.heading;
+  var sub = byId('featured-sub');
+  var subtitle = edit ? edit.subtitle : null;
+  sub.textContent = blank(subtitle) ? '' : subtitle;
+  sub.classList.toggle('hidden', blank(subtitle));
+
+  /* Already resolved server-side, or absent. There is nothing to decide here
+     and deliberately no way for a heading to imply a destination. */
+  var cta = byId('featured-cta');
+  var resolved = edit ? edit.cta : { label: 'All pieces', href: '#/collection' };
+  cta.classList.toggle('hidden', !resolved);
+  if (resolved) { cta.textContent = resolved.label; cta.setAttribute('href', resolved.href); }
+
+  /* The See More control belongs to the unconfigured homepage. A configured
+     edit says where it goes with its own CTA. */
+  byId('featured-more').classList.toggle('hidden', !!edit);
+
+  var arrivals = [];
+  if (arrivalsCfg && arrivalsCfg.show !== false) {
+    var shown = {};
+    if (arrivalsCfg.exclude_featured !== false) {
+      featured.forEach(function (p) { shown[p.id] = true; });
+    }
+    arrivals = newestFirst(PRODUCTS)
+      .filter(function (p) { return !shown[p.id]; })
+      .slice(0, arrivalsCfg.count > 0 ? arrivalsCfg.count : 0);
+  }
+  byId('new-arrivals').classList.toggle('hidden', arrivals.length === 0);
+  byId('arrivals-grid').innerHTML = arrivals.map(function (p) { return cardHTML(p); }).join('');
+  if (arrivalsCfg) byId('arrivals-title').textContent = arrivalsCfg.heading || 'New Arrivals';
+}
+
+/* The campaign hero. Rendered only when the app has actually said something —
+   otherwise the film and copy already in the markup are left entirely alone,
+   which is what keeps migration 029 from changing the site by existing. */
+var HERO_BTNROW = null;
+
+function renderCampaign() {
+  var row0 = $('.hero-copy .btnrow');
+  /* Captured before anything can overwrite it, the same way the editorial hero
+     photograph is: without this the swap is one-way, and a settings outage
+     after a campaign had rendered would leave the hero with no way back. */
+  if (HERO_BTNROW === null && row0) HERO_BTNROW = row0.innerHTML;
+
+  var c = homepageBlock('campaign');
+  document.body.setAttribute('data-theme', (c && c.theme) || 'default');
+  if (!c) {
+    if (row0 && HERO_BTNROW !== null) {
+      row0.innerHTML = HERO_BTNROW;
+      row0.classList.remove('hidden');
+    }
+    return;
+  }
+
+  if (!blank(c.heading)) byId('hero-heading').innerHTML = esc(c.heading);
+  var lede = $('.hero-copy .lede');
+  if (lede && !blank(c.subheading)) lede.textContent = c.subheading;
+
+  /* A configured campaign owns the hero's call to action completely, including
+     the decision to have none at all. The two buttons in the markup belong to
+     the unconfigured homepage: they are a fallback, not a floor. Gating this on
+     the campaign rather than on its CTA is the whole point — with `none` chosen
+     deliberately, an empty row is the answer, and leaving "View the collection"
+     standing would be the site overriding Saima.
+
+     The row is emptied and hidden rather than left in place, because .hero-copy
+     is a flex column with a 30px gap and an empty child still takes one. */
+  /* Where the campaign's one call to action lives.
+ *
+ * A configured campaign has exactly zero or one — the contract carries a single
+ * cta_label and a single destination, so there is no second button to place and
+ * none is invented here.
+ *
+ * On a wide screen it belongs with the words, in the copy column beside the
+ * image. On a phone the two columns wrap and the copy becomes a cream slab
+ * sitting above the photograph, which reads as a banner bolted on top of a
+ * campaign rather than part of one. So on a phone the button moves onto the
+ * image itself, bottom left, over the same gradient the film caption already
+ * uses — one editorial module instead of two stacked blocks.
+ *
+ * One element either way. Rendering it twice and hiding one would duplicate an
+ * id, put a phantom link in the accessibility tree, and give analytics two
+ * things to count later.
+ */
+function campaignCtaOnImage() {
+  return !!(window.matchMedia && window.matchMedia('(max-width:899px)').matches);
+}
+
+function placeCampaignCta(c) {
+  var row = $('.hero-copy .btnrow');
+  var slot = $('.hero-film');
+  var overlay = slot ? slot.querySelector('.campaign-overlay') : null;
+  var caption = slot ? slot.querySelector('.film-tag') : null;
+
+  if (overlay) overlay.parentNode.removeChild(overlay);
+
+  /* The campaign owns the row whether or not it has anything to put in it —
+     see the note above renderCampaign. */
+  if (row) { row.innerHTML = ''; row.classList.add('hidden'); }
+  if (caption) caption.classList.remove('hidden');
+
+  if (!c.cta) return;
+
+  var link = '<a class="pill pill-over" id="campaign-cta" href="' + esc(c.cta.href) + '">'
+    + esc(c.cta.label) + '</a>';
+
+  if (campaignCtaOnImage() && slot) {
+    slot.insertAdjacentHTML('beforeend', '<div class="campaign-overlay">' + link + '</div>');
+    /* The legacy caption sits in exactly this corner. Two things bottom-left
+       is a collision, and the campaign is the one that was asked for. */
+    if (caption) caption.classList.add('hidden');
+    return;
+  }
+
+  if (row) {
+    row.innerHTML = '<a class="pill pill-dark" id="campaign-cta" href="' + esc(c.cta.href) + '">'
+      + esc(c.cta.label) + '</a>';
+    row.classList.remove('hidden');
+  }
+}
+
+/* One file, no responsive renditions — campaign media is app-managed and
+     arrives as a single public URL. The film keeps the behaviour the Roselle
+     one has: muted, inline, its own taps, never wrapped in a link. */
+  if (c.media_url) {
+    var slot = $('.hero-film');
+    if (slot) {
+      var caption = slot.querySelector('.film-tag');
+      var media = c.media_type === 'video'
+        ? '<video id="hero-video"' + (c.media_poster_url ? ' poster="' + esc(c.media_poster_url) + '"' : '')
+          + ' autoplay muted loop playsinline preload="auto" disablepictureinpicture disableremoteplayback'
+          + ' aria-label="' + esc(c.heading || 'Campaign film') + '">'
+          + '<source src="' + esc(c.media_url) + '" type="video/mp4"></video>'
+        : '<img class="campaign-img" src="' + esc(c.media_url) + '" alt="' + esc(c.heading || '') + '">';
+      slot.innerHTML = media + (c.cta ? '' : (caption ? caption.outerHTML : ''));
+      setupHeroFilm();
+    }
+  }
+
+  /* Last, because swapping the media above rewrites the very slot this places
+     the button into. */
+  placeCampaignCta(c);
+}
+
 function renderGrids() {
   renderHero();
+  renderCampaign();
   renderCollectionNav();
-  byId('featured-grid').innerHTML = PRODUCTS.slice(0, 4).map(function (p) { return cardHTML(p); }).join('');
+  renderHomeSections();
 
   var collection = state.collection ? findCollectionBySlug(state.collection) : null;
+  var edit = state.edit ? findEditBySlug(state.edit) : null;
   /* Only once the catalogue has actually arrived: while it is loading every
      slug looks unresolvable, and flashing "not found" at someone whose page is
      still loading would be a lie. */
-  var missing = !!state.collection && !collection && catalogue.status === 'ready';
+  var missing = catalogue.status === 'ready'
+    && ((!!state.collection && !collection) || (!!state.edit && !edit));
 
-  byId('collection-title').textContent = collection ? collection.name : 'The Collection';
+  byId('collection-title').textContent =
+    edit ? edit.title : collection ? collection.name : 'The Collection';
   byId('collection-missing').classList.toggle('hidden', !missing);
-  byId('filters').classList.toggle('hidden', missing);
   byId('collection-grid').classList.toggle('hidden', missing);
 
   /* A piece in two collections appears on both pages — and once on each, since
      it is one entry in PRODUCTS however many collections name it. */
-  var shown = missing ? [] : PRODUCTS.filter(function (p) {
-    return inCollection(p, collection) && matchesFilter(p, state.filter);
-  });
+  /* An edit carries its own selection and its own order, so the availability
+     filter does not apply to it — the pieces were chosen, not queried. */
+  var shown = missing ? []
+    /* Every public piece assigned to the edit, in the app's order. A piece that
+       is no longer published simply is not found — the edit shortens rather
+       than showing a gap, and no count caps an edit page. */
+    : edit ? (edit.product_ids || []).map(findProductById).filter(Boolean)
+    : PRODUCTS.filter(function (p) {
+        return inCollection(p, collection) && matchesFilter(p, state.filter);
+      });
+  byId('filters').classList.toggle('hidden', missing || !!edit);
   byId('collection-grid').innerHTML = shown.map(function (p) { return cardHTML(p); }).join('');
   byId('collection-count').textContent =
     missing ? ''
@@ -1143,15 +1383,26 @@ function route() {
     state.size = null; state.shot = 0;
     renderProduct(); show('product'); window.scrollTo(0, 0); return;
   }
+  /* A curated edit. Deliberately its own route rather than a collection with
+     a different name: an edit may draw from several collections or from none,
+     and pointing its link at a collection page would show the wrong pieces. */
+  if (hash.indexOf('edit/') === 0) {
+    state.edit = decodeURIComponent(hash.slice(5));
+    state.collection = null;
+    state.filter = 'all';
+    renderGrids(); show('collection'); window.scrollTo(0, 0); return;
+  }
   /* A collection of its own. The slug is resolved against the live catalogue
      in renderGrids(), which also handles one that no longer resolves. */
   if (hash.indexOf('collection/') === 0) {
     state.collection = decodeURIComponent(hash.slice(11));
+    state.edit = null;
     state.filter = 'all';
     renderGrids(); show('collection'); window.scrollTo(0, 0); return;
   }
   if (hash === 'collection' || hash === 'ready' || hash === 'made-to-order') {
     state.collection = null;
+    state.edit = null;
     state.filter = hash === 'ready' ? 'ready' : (hash === 'made-to-order' ? 'mto' : 'all');
     renderGrids(); show('collection'); window.scrollTo(0, 0); return;
   }
@@ -1450,9 +1701,19 @@ function loadSettings() {
         next[k] = blank(incoming[k]) ? null : String(incoming[k]).trim();
       });
       SETTINGS = next;
+
+      /* null until the app has merchandised the homepage — the endpoint says so
+         explicitly rather than sending an object of defaults, so an untouched
+         installation cannot accidentally look configured. */
+      HOMEPAGE = (payload && payload.homepage) || null;
+      CURATED_EDITS = (payload && Array.isArray(payload.curated_edits))
+        ? payload.curated_edits : [];
     })
     .catch(function (err) {
       SETTINGS = blankSettings();
+      /* An outage must not rearrange the homepage either. */
+      HOMEPAGE = null;
+      CURATED_EDITS = [];
       if (window.console && console.warn) console.warn('Site settings unavailable:', err);
     })
     .then(function () {
@@ -1646,6 +1907,16 @@ function setupCollectionMenus() {
 
 setupHeroFilm();
 setupCollectionMenus();
+
+/* Crossing the breakpoint moves the campaign button between the copy column and
+   the image. Watched rather than read once, so rotating a phone is enough. */
+(function () {
+  if (!window.matchMedia) return;
+  var q = window.matchMedia('(max-width:899px)');
+  var again = function () { if (homepageBlock('campaign')) renderCampaign(); };
+  if (q.addEventListener) q.addEventListener('change', again);
+  else if (q.addListener) q.addListener(again);
+})();
 
 window.addEventListener('hashchange', route);
 renderCopyrightYear();
