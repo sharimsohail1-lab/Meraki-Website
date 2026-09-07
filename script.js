@@ -555,161 +555,164 @@ function renderCollectionNav() {
 }
 
 /* ===========================================================================
- * HOMEPAGE ARCHITECTURE — TEMPORARY PROTOTYPE CONFIGURATION
+ * HOMEPAGE MERCHANDISING
  * ===========================================================================
  *
- * Everything in this block is a stand-in for settings the app will own. It is
- * deliberately one object in one place so that replacing it with a fetched
- * payload is a single change and nothing else in this file has to move.
+ * Everything here is decided in the app and arrives, already validated and with
+ * its CTAs already resolved to real addresses, from /api/site-settings. The
+ * browser never sees a collection id, an edit id, or an href the app wrote.
  *
- * NOT a permanent home for merchandising decisions. Do not add fields here
- * expecting them to survive: this exists to prove the shape is right before
- * the app builds controls for it.
- *
- * The values below reproduce what the homepage already showed, so this branch
- * changes the architecture without changing what a visitor sees.
- *
- * The two ideas this proves are separable:
- *
- *   A COLLECTION is a durable grouping the app manages. It lives at
- *   #/collection/<slug> and its membership is decided in the app.
- *
- *   A CURATED EDIT is a heading over an arbitrary set of pieces. It lives at
- *   #/edit/<slug>, it may draw from any number of collections or none, and it
- *   needs no collection to exist. "Our Eid Picks" should never require
- *   creating an Eid collection.
- *
- * A heading never decides a destination. Both are configuration.
+ * The rule that outranks every other rule in this file: a homepage that has
+ * never been merchandised looks exactly as it did before any of this existed.
+ * HOMEPAGE stays null until the endpoint says otherwise, and a block that is
+ * absent from the configuration stays absent rather than being conjured from
+ * its defaults — so configuring a campaign alone changes the hero and nothing
+ * else.
  */
-var HOMEPAGE_PROTOTYPE = {
-  /* The curated block below the hero. `source` decides which pieces; `title`
-     and `cta` decide what is said about them. They are independent on
-     purpose. */
-  featuredEdit: {
-    show: true,
-    /* null leaves the editorial default that ships in index.html untouched.
-       Nothing here names a collection: the moment a name lives in this file,
-       renaming it in the app stops changing the site. A string overrides the
-       markup; null defers to it. */
-    title: null,
-    subtitle: '',
-    /* 'new_arrivals' — the newest published pieces, whatever their collection.
-       'collection'   — one collection, by slug, via `collectionSlug`.
-       'products'     — an explicit ordered list of product slugs.
-       Reproduces today's homepage, which took the first four of a
-       newest-first catalogue. */
-    source: { type: 'new_arrivals' },
-    count: 4,
-    cta: { label: 'All pieces', href: '#/collection' },
-    more: { show: true, href: '#/collection' }
-  },
+var HOMEPAGE = null;
+var CURATED_EDITS = [];
 
-  /* Never curated: whatever is newest. Off by default so this branch does not
-     invent homepage content — the tests turn it on to prove it works. */
-  newArrivals: {
-    show: false,
-    title: 'New Arrivals',
-    count: 4,
-    /* Pieces already shown in the edit above are not repeated here. */
-    excludeFeatured: true
-  }
-};
-
-/* Curated edits, keyed by slug. A real implementation will carry an ordered
-   list of product ids from the app; `pick` stands in for that here so the
-   prototype works against any catalogue rather than naming real products.
-   Obviously a demo — it is not linked from anywhere and exists to prove the
-   route and the model. */
-var CURATED_EDITS_PROTOTYPE = [
-  {
-    slug: 'demo-picks',
-    title: 'Demo Edit — Sample Picks',
-    subtitle: 'A prototype edit. Not real merchandising.',
-    pick: function (products) {
-      /* Every other piece, so the result is visibly a selection rather than
-         "the first few", and spans whatever collections happen to exist. */
-      return products.filter(function (_, i) { return i % 2 === 0; }).slice(0, 6);
-    }
-  }
-];
+function homepageBlock(name) {
+  return HOMEPAGE && HOMEPAGE[name] ? HOMEPAGE[name] : null;
+}
 
 function findEditBySlug(slug) {
   if (blank(slug)) return null;
-  var want = collectionSlug(slug);
-  return CURATED_EDITS_PROTOTYPE.filter(function (e) {
-    return collectionSlug(e.slug) === want;
+  var want = String(slug).trim().toLowerCase();
+  /* The stored slug, compared as stored. It is the operator's to edit and
+     survives a title rename, so deriving one from the title here would send
+     people to a page that no longer answers. */
+  return CURATED_EDITS.filter(function (e) {
+    return String(e.slug || '').trim().toLowerCase() === want;
   })[0] || null;
 }
 
-/* Resolve a source description to an ordered list of pieces. The catalogue
-   arrives newest-first from the API and is not re-sorted, so "newest" is
-   simply the head of it. Anything that cannot be resolved yields nothing
-   rather than guessing — a section with no pieces hides itself. */
-function resolveSource(source, limit) {
-  if (!source) return [];
-  var out = [];
-
-  if (source.type === 'collection') {
-    var collection = findCollectionBySlug(source.slug);
-    out = collection
-      ? PRODUCTS.filter(function (p) { return inCollection(p, collection); })
-      : [];
-  } else if (source.type === 'products') {
-    /* Configured order wins, and a piece that is no longer published simply
-       is not found — the section shortens rather than breaking. */
-    out = (source.slugs || []).map(findProductBySlug).filter(Boolean);
-  } else {
-    out = PRODUCTS.slice();
-  }
-
-  /* A count of zero means zero. Only an absent count means "all of them" —
-     otherwise a misconfigured or unparsed number would tip the whole catalogue
-     onto the homepage, which is the loudest possible failure. */
-  if (limit === undefined || limit === null || limit === '') return out;
-  var n = Number(limit);
-  return n > 0 ? out.slice(0, n) : [];
+function findProductById(id) {
+  if (blank(id)) return null;
+  return PRODUCTS.filter(function (p) { return p.id === id; })[0] || null;
 }
 
-/* The curated block and the arrivals block. Both hide themselves rather than
-   render an empty heading, which is what stops a misconfiguration from leaving
-   a bare title over nothing. */
+/* Newest first. website_published_at is when Saima put it on the site, which is
+   what "new" means to a visitor; created_at is the fallback for a piece that
+   predates the column. */
+function newestFirst(products) {
+  return products.slice().sort(function (a, b) {
+    var av = a.publishedAt || a.createdAt || '';
+    var bv = b.publishedAt || b.createdAt || '';
+    return av < bv ? 1 : av > bv ? -1 : 0;
+  });
+}
+
+/* The pieces a featured edit resolves to, in the order they should appear.
+   Nothing here pads: if four of six chosen pieces are still published, four is
+   the honest answer, and the saved configuration is never rewritten to match. */
+function featuredEditProducts(cfg) {
+  if (!cfg || cfg.show !== true) return [];
+  var out = [];
+
+  if (cfg.source_type === 'collection') {
+    var collection = findCollectionBySlug(cfg.source_collection_slug);
+    /* collection_names already carries only publicly visible memberships of
+       publicly visible collections, so honouring 028's two switches here is
+       simply a matter of using it. */
+    out = collection
+      ? newestFirst(PRODUCTS.filter(function (p) { return inCollection(p, collection); }))
+      : [];
+  } else if (cfg.source_type === 'products') {
+    out = (cfg.product_ids || []).map(findProductById).filter(Boolean);
+  } else {
+    out = newestFirst(PRODUCTS);
+  }
+
+  return out.slice(0, cfg.count > 0 ? cfg.count : 0);
+}
+
 function renderHomeSections() {
-  var cfg = HOMEPAGE_PROTOTYPE.featuredEdit || {};
+  var edit = homepageBlock('featured_edit');
+  var arrivalsCfg = homepageBlock('new_arrivals');
+
+  /* An absent block is not a decision to hide anything: the section keeps doing
+     what it did before the app knew about it. */
+  var featured = edit ? featuredEditProducts(edit) : PRODUCTS.slice(0, 4);
   var section = byId('featured');
-  var featured = cfg.show === false ? [] : resolveSource(cfg.source, cfg.count);
 
   section.classList.toggle('hidden', featured.length === 0);
   byId('featured-grid').innerHTML = featured.map(function (p) { return cardHTML(p); }).join('');
-  if (!blank(cfg.title)) setText(byId('featured-title'), cfg.title);
-  setText(byId('featured-sub'), cfg.subtitle);
-  byId('featured-sub').classList.toggle('hidden', blank(cfg.subtitle));
 
+  if (edit && !blank(edit.heading)) byId('featured-title').textContent = edit.heading;
+  var sub = byId('featured-sub');
+  var subtitle = edit ? edit.subtitle : null;
+  sub.textContent = blank(subtitle) ? '' : subtitle;
+  sub.classList.toggle('hidden', blank(subtitle));
+
+  /* Already resolved server-side, or absent. There is nothing to decide here
+     and deliberately no way for a heading to imply a destination. */
   var cta = byId('featured-cta');
-  var hasCta = cfg.cta && !blank(cfg.cta.label) && !blank(cfg.cta.href);
-  cta.classList.toggle('hidden', !hasCta);
-  if (hasCta) { cta.textContent = cfg.cta.label; cta.setAttribute('href', cfg.cta.href); }
+  var resolved = edit ? edit.cta : { label: 'All pieces', href: '#/collection' };
+  cta.classList.toggle('hidden', !resolved);
+  if (resolved) { cta.textContent = resolved.label; cta.setAttribute('href', resolved.href); }
 
-  var more = cfg.more || {};
-  byId('featured-more').classList.toggle('hidden', more.show === false || blank(more.href));
-  if (!blank(more.href)) byId('featured-more-btn').dataset.nav = more.href;
+  /* The See More control belongs to the unconfigured homepage. A configured
+     edit says where it goes with its own CTA. */
+  byId('featured-more').classList.toggle('hidden', !!edit);
 
-  /* Arrivals, minus anything the edit above already showed. */
-  var acfg = HOMEPAGE_PROTOTYPE.newArrivals || {};
-  var shownIds = {};
-  featured.forEach(function (p) { shownIds[p.id] = true; });
-  var arrivals = acfg.show === false ? [] : PRODUCTS
-    .filter(function (p) { return !(acfg.excludeFeatured && shownIds[p.id]); })
-    .slice(0, acfg.count || 4);
-
+  var arrivals = [];
+  if (arrivalsCfg && arrivalsCfg.show !== false) {
+    var shown = {};
+    if (arrivalsCfg.exclude_featured !== false) {
+      featured.forEach(function (p) { shown[p.id] = true; });
+    }
+    arrivals = newestFirst(PRODUCTS)
+      .filter(function (p) { return !shown[p.id]; })
+      .slice(0, arrivalsCfg.count > 0 ? arrivalsCfg.count : 0);
+  }
   byId('new-arrivals').classList.toggle('hidden', arrivals.length === 0);
   byId('arrivals-grid').innerHTML = arrivals.map(function (p) { return cardHTML(p); }).join('');
-  setText(byId('arrivals-title'), acfg.title);
+  if (arrivalsCfg) byId('arrivals-title').textContent = arrivalsCfg.heading || 'New Arrivals';
 }
 
-function setText(el, value) { if (el) el.textContent = blank(value) ? '' : String(value).trim(); }
+/* The campaign hero. Rendered only when the app has actually said something —
+   otherwise the film and copy already in the markup are left entirely alone,
+   which is what keeps migration 029 from changing the site by existing. */
+function renderCampaign() {
+  var c = homepageBlock('campaign');
+  document.body.setAttribute('data-theme', (c && c.theme) || 'default');
+  if (!c) return;
+
+  if (!blank(c.heading)) byId('hero-heading').innerHTML = esc(c.heading);
+  var lede = $('.hero-copy .lede');
+  if (lede && !blank(c.subheading)) lede.textContent = c.subheading;
+
+  if (c.cta) {
+    var row = $('.hero-copy .btnrow');
+    if (row) {
+      row.innerHTML = '<a class="pill pill-dark" id="campaign-cta" href="' + esc(c.cta.href) + '">'
+        + esc(c.cta.label) + '</a>';
+    }
+  }
+
+  /* One file, no responsive renditions — campaign media is app-managed and
+     arrives as a single public URL. The film keeps the behaviour the Roselle
+     one has: muted, inline, its own taps, never wrapped in a link. */
+  if (c.media_url) {
+    var slot = $('.hero-film');
+    if (slot) {
+      var caption = slot.querySelector('.film-tag');
+      var media = c.media_type === 'video'
+        ? '<video id="hero-video"' + (c.media_poster_url ? ' poster="' + esc(c.media_poster_url) + '"' : '')
+          + ' autoplay muted loop playsinline preload="auto" disablepictureinpicture disableremoteplayback'
+          + ' aria-label="' + esc(c.heading || 'Campaign film') + '">'
+          + '<source src="' + esc(c.media_url) + '" type="video/mp4"></video>'
+        : '<img class="campaign-img" src="' + esc(c.media_url) + '" alt="' + esc(c.heading || '') + '">';
+      slot.innerHTML = media + (c.cta ? '' : (caption ? caption.outerHTML : ''));
+      setupHeroFilm();
+    }
+  }
+}
 
 function renderGrids() {
   renderHero();
+  renderCampaign();
   renderCollectionNav();
   renderHomeSections();
 
@@ -731,7 +734,10 @@ function renderGrids() {
   /* An edit carries its own selection and its own order, so the availability
      filter does not apply to it — the pieces were chosen, not queried. */
   var shown = missing ? []
-    : edit ? edit.pick(PRODUCTS.slice())
+    /* Every public piece assigned to the edit, in the app's order. A piece that
+       is no longer published simply is not found — the edit shortens rather
+       than showing a gap, and no count caps an edit page. */
+    : edit ? (edit.product_ids || []).map(findProductById).filter(Boolean)
     : PRODUCTS.filter(function (p) {
         return inCollection(p, collection) && matchesFilter(p, state.filter);
       });
@@ -1622,9 +1628,19 @@ function loadSettings() {
         next[k] = blank(incoming[k]) ? null : String(incoming[k]).trim();
       });
       SETTINGS = next;
+
+      /* null until the app has merchandised the homepage — the endpoint says so
+         explicitly rather than sending an object of defaults, so an untouched
+         installation cannot accidentally look configured. */
+      HOMEPAGE = (payload && payload.homepage) || null;
+      CURATED_EDITS = (payload && Array.isArray(payload.curated_edits))
+        ? payload.curated_edits : [];
     })
     .catch(function (err) {
       SETTINGS = blankSettings();
+      /* An outage must not rearrange the homepage either. */
+      HOMEPAGE = null;
+      CURATED_EDITS = [];
       if (window.console && console.warn) console.warn('Site settings unavailable:', err);
     })
     .then(function () {

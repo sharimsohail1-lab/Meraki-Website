@@ -392,3 +392,15 @@ footer{border-top:1px solid rgba(42,31,34,.11);padding:clamp(44px,5vw,72px) var(
 /* A button that cannot be pressed should not offer a pointer. Colours are already
    set explicitly above, so disabling changes nothing else visually. */
 button:disabled{cursor:default}
+
+/* Campaign media. One app-managed file, no responsive renditions, so it is
+   fitted to the same footprint the film occupies rather than sized by width. */
+.campaign-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  object-position:50% 28%;display:block;background:var(--stone)}
+@media(max-width:940px){.campaign-img{object-position:50% 22%}}
+
+/* Seasonal themes. A closed set the website owns: the app picks a name, never
+   a colour. Restraint is the point — the accent moves, the paper warms
+   slightly, and nothing else about the page changes. */
+body[data-theme="festive"]{--plum:#7A1B2E;--gold:#B08A2E;--ground:#FCF7F1;--sand:#F4EBE0}
+body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:#F2E9E7}

@@ -102,7 +102,7 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
   <section class="hero">
     <div class="hero-copy">
       <p class="eyebrow">Pakistani womenswear · made in Lahore</p>
-      <h1 class="display">Timeless pieces,<br><em>thoughtfully made.</em></h1>
+      <h1 class="display" id="hero-heading">Timeless pieces,<br><em>thoughtfully made.</em></h1>
       <p class="lede">A small, considered collection — hand-finished embroidery, fluid silks, and pieces cut to your measurements.</p>
       <div class="btnrow">
         <button class="pill pill-dark" data-nav="#/collection">View the collection</button>
@@ -135,7 +135,8 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
   </section>
 
   <!-- FEATURED EDIT. The heading, the link label and where that link goes are
-       all written by renderHomeSections() from HOMEPAGE_PROTOTYPE in script.js.
+       all written by renderHomeSections() from the homepage configuration the
+       app supplies through /api/site-settings.
        Nothing here names a collection: an edit called "Our Eid Picks" may be
        drawn from six collections and lead to an edit page, not a collection
        page. The empty text nodes are so nothing Saima has changed can flash
@@ -150,7 +151,7 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
     <!-- The homepage deliberately shows only a few pieces; this is the way on
          to the rest of them rather than a dead end. Same routing as every other
          link on the site. -->
-    <div class="more-wrap hidden" id="featured-more"><button class="more" id="featured-more-btn">See more<span aria-hidden="true">→</span></button></div>
+    <div class="more-wrap hidden" id="featured-more"><button class="more" id="featured-more-btn" data-nav="#/collection">See more<span aria-hidden="true">→</span></button></div>
   </section>
 
   <!-- NEW ARRIVALS. Deliberately a separate section from the edit above: this

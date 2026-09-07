@@ -277,6 +277,20 @@ function publicCollectionNames(row) {
   return names;
 }
 
+/* A collection's address. Collections have no slug column, so the website
+   derives one from the name — and the same derivation has to run here, because
+   a CTA aimed at a collection is resolved server-side. Kept beside the rest of
+   the collection handling and exported so /api/site-settings uses this one
+   rather than a second copy that could drift from it. The browser's copy in
+   script.js is held to byte-identical output by test. */
+function collectionSlug(name) {
+  var s = String(name == null ? '' : name).trim().toLowerCase();
+  if (s.normalize) s = s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+  return s.replace(/['\u2018\u2019\u02bc]/g, '')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+}
+
 /* Public rendition URLs by width. The stored value is
    { "560": { public_url, storage_key }, … } — only the URL is public, and a
    width whose entry has no URL is omitted rather than faked. */
@@ -411,5 +425,6 @@ module.exports.isStorefrontVisible = isStorefrontVisible;
 module.exports.publicImage = publicImage;
 module.exports.availableSizeLabels = availableSizeLabels;
 module.exports.collectionNames = collectionNames;
+module.exports.collectionSlug = collectionSlug;
 module.exports.publicCollectionNames = publicCollectionNames;
 module.exports.variantUrls = variantUrls;
