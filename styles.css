@@ -404,3 +404,32 @@ button:disabled{cursor:default}
    slightly, and nothing else about the page changes. */
 body[data-theme="festive"]{--plum:#7A1B2E;--gold:#B08A2E;--ground:#FCF7F1;--sand:#F4EBE0}
 body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:#F2E9E7}
+
+/* The campaign's one call to action, sitting on the image on a phone. Same
+   gradient language as the film caption — it exists only where the words are,
+   so the photograph is never dimmed as a whole. The strip takes no pointer
+   events so the film underneath keeps its own taps; only the button does. */
+.campaign-overlay{position:absolute;left:0;right:0;bottom:0;z-index:2;
+  display:flex;align-items:flex-end;pointer-events:none;
+  padding:clamp(56px,11vw,110px) clamp(18px,5vw,30px) clamp(18px,4.5vw,26px);
+  background:linear-gradient(to top,rgba(24,16,18,.52),rgba(24,16,18,0))}
+.campaign-overlay .pill{pointer-events:auto}
+/* Paper on the image rather than ink: a dark button on a dark gradient reads as
+   a hole. Wraps rather than clips when a label runs long. */
+.pill-over{border:none;background:var(--ground);color:var(--ink);
+  padding:17px 26px;max-width:min(86vw,420px);white-space:normal;
+  text-align:center;box-shadow:0 6px 22px rgba(24,16,18,.22)}
+.pill-over:hover{background:#fff;color:var(--ink)}
+.pill-over:focus-visible{outline:2px solid var(--ground);outline-offset:3px}
+
+/* On a phone the copy column and the image stack. Tightening the space between
+   them is what stops the words reading as a separate slab above a photograph
+   and lets the two behave as one campaign. */
+@media(max-width:899px){
+  .hero-copy{gap:18px;
+    padding:clamp(30px,6vw,44px) clamp(24px,5vw,84px) clamp(22px,5vw,28px)}
+  /* Short enough that the image and the button standing on it are both in
+     view without scrolling — a call to action below the fold of its own
+     campaign is not integrated with anything. */
+  .hero-img{min-height:clamp(330px,56vh,540px)}
+}

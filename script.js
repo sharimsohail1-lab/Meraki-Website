@@ -706,16 +706,61 @@ function renderCampaign() {
 
      The row is emptied and hidden rather than left in place, because .hero-copy
      is a flex column with a 30px gap and an empty child still takes one. */
+  /* Where the campaign's one call to action lives.
+ *
+ * A configured campaign has exactly zero or one — the contract carries a single
+ * cta_label and a single destination, so there is no second button to place and
+ * none is invented here.
+ *
+ * On a wide screen it belongs with the words, in the copy column beside the
+ * image. On a phone the two columns wrap and the copy becomes a cream slab
+ * sitting above the photograph, which reads as a banner bolted on top of a
+ * campaign rather than part of one. So on a phone the button moves onto the
+ * image itself, bottom left, over the same gradient the film caption already
+ * uses — one editorial module instead of two stacked blocks.
+ *
+ * One element either way. Rendering it twice and hiding one would duplicate an
+ * id, put a phantom link in the accessibility tree, and give analytics two
+ * things to count later.
+ */
+function campaignCtaOnImage() {
+  return !!(window.matchMedia && window.matchMedia('(max-width:899px)').matches);
+}
+
+function placeCampaignCta(c) {
   var row = $('.hero-copy .btnrow');
-  if (row) {
-    row.innerHTML = c.cta
-      ? '<a class="pill pill-dark" id="campaign-cta" href="' + esc(c.cta.href) + '">'
-        + esc(c.cta.label) + '</a>'
-      : '';
-    row.classList.toggle('hidden', !c.cta);
+  var slot = $('.hero-film');
+  var overlay = slot ? slot.querySelector('.campaign-overlay') : null;
+  var caption = slot ? slot.querySelector('.film-tag') : null;
+
+  if (overlay) overlay.parentNode.removeChild(overlay);
+
+  /* The campaign owns the row whether or not it has anything to put in it —
+     see the note above renderCampaign. */
+  if (row) { row.innerHTML = ''; row.classList.add('hidden'); }
+  if (caption) caption.classList.remove('hidden');
+
+  if (!c.cta) return;
+
+  var link = '<a class="pill pill-over" id="campaign-cta" href="' + esc(c.cta.href) + '">'
+    + esc(c.cta.label) + '</a>';
+
+  if (campaignCtaOnImage() && slot) {
+    slot.insertAdjacentHTML('beforeend', '<div class="campaign-overlay">' + link + '</div>');
+    /* The legacy caption sits in exactly this corner. Two things bottom-left
+       is a collision, and the campaign is the one that was asked for. */
+    if (caption) caption.classList.add('hidden');
+    return;
   }
 
-  /* One file, no responsive renditions — campaign media is app-managed and
+  if (row) {
+    row.innerHTML = '<a class="pill pill-dark" id="campaign-cta" href="' + esc(c.cta.href) + '">'
+      + esc(c.cta.label) + '</a>';
+    row.classList.remove('hidden');
+  }
+}
+
+/* One file, no responsive renditions — campaign media is app-managed and
      arrives as a single public URL. The film keeps the behaviour the Roselle
      one has: muted, inline, its own taps, never wrapped in a link. */
   if (c.media_url) {
@@ -732,6 +777,10 @@ function renderCampaign() {
       setupHeroFilm();
     }
   }
+
+  /* Last, because swapping the media above rewrites the very slot this places
+     the button into. */
+  placeCampaignCta(c);
 }
 
 function renderGrids() {
@@ -1858,6 +1907,16 @@ function setupCollectionMenus() {
 
 setupHeroFilm();
 setupCollectionMenus();
+
+/* Crossing the breakpoint moves the campaign button between the copy column and
+   the image. Watched rather than read once, so rotating a phone is enough. */
+(function () {
+  if (!window.matchMedia) return;
+  var q = window.matchMedia('(max-width:899px)');
+  var again = function () { if (homepageBlock('campaign')) renderCampaign(); };
+  if (q.addEventListener) q.addEventListener('change', again);
+  else if (q.addListener) q.addListener(again);
+})();
 
 window.addEventListener('hashchange', route);
 renderCopyrightYear();
