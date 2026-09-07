@@ -134,16 +134,35 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
     </div>
   </section>
 
-  <section class="section" id="featured">
+  <!-- FEATURED EDIT. The heading, the link label and where that link goes are
+       all written by renderHomeSections() from HOMEPAGE_PROTOTYPE in script.js.
+       Nothing here names a collection: an edit called "Our Eid Picks" may be
+       drawn from six collections and lead to an edit page, not a collection
+       page. The empty text nodes are so nothing Saima has changed can flash
+       on screen before the configuration is read. -->
+  <section class="section hidden" id="featured">
     <div class="sec-head">
-      <h2 class="serif">The Roselle Collection</h2>
-      <a class="textlink" href="#/collection">All pieces</a>
+      <h2 class="serif" id="featured-title">The Roselle Collection</h2>
+      <a class="textlink hidden" id="featured-cta" href="#/collection"></a>
     </div>
+    <p class="subtle hidden" id="featured-sub"></p>
     <div class="grid" id="featured-grid"></div>
     <!-- The homepage deliberately shows only a few pieces; this is the way on
          to the rest of them rather than a dead end. Same routing as every other
          link on the site. -->
-    <div class="more-wrap"><button class="more" data-nav="#/collection">See more<span aria-hidden="true">→</span></button></div>
+    <div class="more-wrap hidden" id="featured-more"><button class="more" id="featured-more-btn">See more<span aria-hidden="true">→</span></button></div>
+  </section>
+
+  <!-- NEW ARRIVALS. Deliberately a separate section from the edit above: this
+       one is never curated, it is simply the newest published pieces whatever
+       collection they belong to. It hides itself when there is nothing new
+       enough to be worth a heading. -->
+  <section class="section hidden" id="new-arrivals">
+    <div class="sec-head">
+      <h2 class="serif" id="arrivals-title">New Arrivals</h2>
+      <a class="textlink" href="#/collection">All pieces</a>
+    </div>
+    <div class="grid small" id="arrivals-grid"></div>
   </section>
 
   <section class="split" id="story">

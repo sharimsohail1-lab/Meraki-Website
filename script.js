@@ -294,7 +294,7 @@ var SETTINGS = blankSettings();
    holding a reference to a stale array. */
 var PRODUCTS = [];
 
-var state = { filter:'all', slug:null, collection:null, size:null, shot:0, bag:[], sent:false };
+var state = { filter:'all', slug:null, collection:null, edit:null, size:null, shot:0, bag:[], sent:false };
 
 /* Is the catalogue usable yet? 'loading' | 'ready' | 'error'.
 
@@ -554,27 +554,188 @@ function renderCollectionNav() {
   if (mobile) mobile.innerHTML = '<ul class="navmenu-list-inner">' + html + '</ul>';
 }
 
+/* ===========================================================================
+ * HOMEPAGE ARCHITECTURE — TEMPORARY PROTOTYPE CONFIGURATION
+ * ===========================================================================
+ *
+ * Everything in this block is a stand-in for settings the app will own. It is
+ * deliberately one object in one place so that replacing it with a fetched
+ * payload is a single change and nothing else in this file has to move.
+ *
+ * NOT a permanent home for merchandising decisions. Do not add fields here
+ * expecting them to survive: this exists to prove the shape is right before
+ * the app builds controls for it.
+ *
+ * The values below reproduce what the homepage already showed, so this branch
+ * changes the architecture without changing what a visitor sees.
+ *
+ * The two ideas this proves are separable:
+ *
+ *   A COLLECTION is a durable grouping the app manages. It lives at
+ *   #/collection/<slug> and its membership is decided in the app.
+ *
+ *   A CURATED EDIT is a heading over an arbitrary set of pieces. It lives at
+ *   #/edit/<slug>, it may draw from any number of collections or none, and it
+ *   needs no collection to exist. "Our Eid Picks" should never require
+ *   creating an Eid collection.
+ *
+ * A heading never decides a destination. Both are configuration.
+ */
+var HOMEPAGE_PROTOTYPE = {
+  /* The curated block below the hero. `source` decides which pieces; `title`
+     and `cta` decide what is said about them. They are independent on
+     purpose. */
+  featuredEdit: {
+    show: true,
+    /* null leaves the editorial default that ships in index.html untouched.
+       Nothing here names a collection: the moment a name lives in this file,
+       renaming it in the app stops changing the site. A string overrides the
+       markup; null defers to it. */
+    title: null,
+    subtitle: '',
+    /* 'new_arrivals' — the newest published pieces, whatever their collection.
+       'collection'   — one collection, by slug, via `collectionSlug`.
+       'products'     — an explicit ordered list of product slugs.
+       Reproduces today's homepage, which took the first four of a
+       newest-first catalogue. */
+    source: { type: 'new_arrivals' },
+    count: 4,
+    cta: { label: 'All pieces', href: '#/collection' },
+    more: { show: true, href: '#/collection' }
+  },
+
+  /* Never curated: whatever is newest. Off by default so this branch does not
+     invent homepage content — the tests turn it on to prove it works. */
+  newArrivals: {
+    show: false,
+    title: 'New Arrivals',
+    count: 4,
+    /* Pieces already shown in the edit above are not repeated here. */
+    excludeFeatured: true
+  }
+};
+
+/* Curated edits, keyed by slug. A real implementation will carry an ordered
+   list of product ids from the app; `pick` stands in for that here so the
+   prototype works against any catalogue rather than naming real products.
+   Obviously a demo — it is not linked from anywhere and exists to prove the
+   route and the model. */
+var CURATED_EDITS_PROTOTYPE = [
+  {
+    slug: 'demo-picks',
+    title: 'Demo Edit — Sample Picks',
+    subtitle: 'A prototype edit. Not real merchandising.',
+    pick: function (products) {
+      /* Every other piece, so the result is visibly a selection rather than
+         "the first few", and spans whatever collections happen to exist. */
+      return products.filter(function (_, i) { return i % 2 === 0; }).slice(0, 6);
+    }
+  }
+];
+
+function findEditBySlug(slug) {
+  if (blank(slug)) return null;
+  var want = collectionSlug(slug);
+  return CURATED_EDITS_PROTOTYPE.filter(function (e) {
+    return collectionSlug(e.slug) === want;
+  })[0] || null;
+}
+
+/* Resolve a source description to an ordered list of pieces. The catalogue
+   arrives newest-first from the API and is not re-sorted, so "newest" is
+   simply the head of it. Anything that cannot be resolved yields nothing
+   rather than guessing — a section with no pieces hides itself. */
+function resolveSource(source, limit) {
+  if (!source) return [];
+  var out = [];
+
+  if (source.type === 'collection') {
+    var collection = findCollectionBySlug(source.slug);
+    out = collection
+      ? PRODUCTS.filter(function (p) { return inCollection(p, collection); })
+      : [];
+  } else if (source.type === 'products') {
+    /* Configured order wins, and a piece that is no longer published simply
+       is not found — the section shortens rather than breaking. */
+    out = (source.slugs || []).map(findProductBySlug).filter(Boolean);
+  } else {
+    out = PRODUCTS.slice();
+  }
+
+  /* A count of zero means zero. Only an absent count means "all of them" —
+     otherwise a misconfigured or unparsed number would tip the whole catalogue
+     onto the homepage, which is the loudest possible failure. */
+  if (limit === undefined || limit === null || limit === '') return out;
+  var n = Number(limit);
+  return n > 0 ? out.slice(0, n) : [];
+}
+
+/* The curated block and the arrivals block. Both hide themselves rather than
+   render an empty heading, which is what stops a misconfiguration from leaving
+   a bare title over nothing. */
+function renderHomeSections() {
+  var cfg = HOMEPAGE_PROTOTYPE.featuredEdit || {};
+  var section = byId('featured');
+  var featured = cfg.show === false ? [] : resolveSource(cfg.source, cfg.count);
+
+  section.classList.toggle('hidden', featured.length === 0);
+  byId('featured-grid').innerHTML = featured.map(function (p) { return cardHTML(p); }).join('');
+  if (!blank(cfg.title)) setText(byId('featured-title'), cfg.title);
+  setText(byId('featured-sub'), cfg.subtitle);
+  byId('featured-sub').classList.toggle('hidden', blank(cfg.subtitle));
+
+  var cta = byId('featured-cta');
+  var hasCta = cfg.cta && !blank(cfg.cta.label) && !blank(cfg.cta.href);
+  cta.classList.toggle('hidden', !hasCta);
+  if (hasCta) { cta.textContent = cfg.cta.label; cta.setAttribute('href', cfg.cta.href); }
+
+  var more = cfg.more || {};
+  byId('featured-more').classList.toggle('hidden', more.show === false || blank(more.href));
+  if (!blank(more.href)) byId('featured-more-btn').dataset.nav = more.href;
+
+  /* Arrivals, minus anything the edit above already showed. */
+  var acfg = HOMEPAGE_PROTOTYPE.newArrivals || {};
+  var shownIds = {};
+  featured.forEach(function (p) { shownIds[p.id] = true; });
+  var arrivals = acfg.show === false ? [] : PRODUCTS
+    .filter(function (p) { return !(acfg.excludeFeatured && shownIds[p.id]); })
+    .slice(0, acfg.count || 4);
+
+  byId('new-arrivals').classList.toggle('hidden', arrivals.length === 0);
+  byId('arrivals-grid').innerHTML = arrivals.map(function (p) { return cardHTML(p); }).join('');
+  setText(byId('arrivals-title'), acfg.title);
+}
+
+function setText(el, value) { if (el) el.textContent = blank(value) ? '' : String(value).trim(); }
+
 function renderGrids() {
   renderHero();
   renderCollectionNav();
-  byId('featured-grid').innerHTML = PRODUCTS.slice(0, 4).map(function (p) { return cardHTML(p); }).join('');
+  renderHomeSections();
 
   var collection = state.collection ? findCollectionBySlug(state.collection) : null;
+  var edit = state.edit ? findEditBySlug(state.edit) : null;
   /* Only once the catalogue has actually arrived: while it is loading every
      slug looks unresolvable, and flashing "not found" at someone whose page is
      still loading would be a lie. */
-  var missing = !!state.collection && !collection && catalogue.status === 'ready';
+  var missing = catalogue.status === 'ready'
+    && ((!!state.collection && !collection) || (!!state.edit && !edit));
 
-  byId('collection-title').textContent = collection ? collection.name : 'The Collection';
+  byId('collection-title').textContent =
+    edit ? edit.title : collection ? collection.name : 'The Collection';
   byId('collection-missing').classList.toggle('hidden', !missing);
-  byId('filters').classList.toggle('hidden', missing);
   byId('collection-grid').classList.toggle('hidden', missing);
 
   /* A piece in two collections appears on both pages — and once on each, since
      it is one entry in PRODUCTS however many collections name it. */
-  var shown = missing ? [] : PRODUCTS.filter(function (p) {
-    return inCollection(p, collection) && matchesFilter(p, state.filter);
-  });
+  /* An edit carries its own selection and its own order, so the availability
+     filter does not apply to it — the pieces were chosen, not queried. */
+  var shown = missing ? []
+    : edit ? edit.pick(PRODUCTS.slice())
+    : PRODUCTS.filter(function (p) {
+        return inCollection(p, collection) && matchesFilter(p, state.filter);
+      });
+  byId('filters').classList.toggle('hidden', missing || !!edit);
   byId('collection-grid').innerHTML = shown.map(function (p) { return cardHTML(p); }).join('');
   byId('collection-count').textContent =
     missing ? ''
@@ -1143,15 +1304,26 @@ function route() {
     state.size = null; state.shot = 0;
     renderProduct(); show('product'); window.scrollTo(0, 0); return;
   }
+  /* A curated edit. Deliberately its own route rather than a collection with
+     a different name: an edit may draw from several collections or from none,
+     and pointing its link at a collection page would show the wrong pieces. */
+  if (hash.indexOf('edit/') === 0) {
+    state.edit = decodeURIComponent(hash.slice(5));
+    state.collection = null;
+    state.filter = 'all';
+    renderGrids(); show('collection'); window.scrollTo(0, 0); return;
+  }
   /* A collection of its own. The slug is resolved against the live catalogue
      in renderGrids(), which also handles one that no longer resolves. */
   if (hash.indexOf('collection/') === 0) {
     state.collection = decodeURIComponent(hash.slice(11));
+    state.edit = null;
     state.filter = 'all';
     renderGrids(); show('collection'); window.scrollTo(0, 0); return;
   }
   if (hash === 'collection' || hash === 'ready' || hash === 'made-to-order') {
     state.collection = null;
+    state.edit = null;
     state.filter = hash === 'ready' ? 'ready' : (hash === 'made-to-order' ? 'mto' : 'all');
     renderGrids(); show('collection'); window.scrollTo(0, 0); return;
   }
