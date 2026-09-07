@@ -674,21 +674,45 @@ function renderHomeSections() {
 /* The campaign hero. Rendered only when the app has actually said something —
    otherwise the film and copy already in the markup are left entirely alone,
    which is what keeps migration 029 from changing the site by existing. */
+var HERO_BTNROW = null;
+
 function renderCampaign() {
+  var row0 = $('.hero-copy .btnrow');
+  /* Captured before anything can overwrite it, the same way the editorial hero
+     photograph is: without this the swap is one-way, and a settings outage
+     after a campaign had rendered would leave the hero with no way back. */
+  if (HERO_BTNROW === null && row0) HERO_BTNROW = row0.innerHTML;
+
   var c = homepageBlock('campaign');
   document.body.setAttribute('data-theme', (c && c.theme) || 'default');
-  if (!c) return;
+  if (!c) {
+    if (row0 && HERO_BTNROW !== null) {
+      row0.innerHTML = HERO_BTNROW;
+      row0.classList.remove('hidden');
+    }
+    return;
+  }
 
   if (!blank(c.heading)) byId('hero-heading').innerHTML = esc(c.heading);
   var lede = $('.hero-copy .lede');
   if (lede && !blank(c.subheading)) lede.textContent = c.subheading;
 
-  if (c.cta) {
-    var row = $('.hero-copy .btnrow');
-    if (row) {
-      row.innerHTML = '<a class="pill pill-dark" id="campaign-cta" href="' + esc(c.cta.href) + '">'
-        + esc(c.cta.label) + '</a>';
-    }
+  /* A configured campaign owns the hero's call to action completely, including
+     the decision to have none at all. The two buttons in the markup belong to
+     the unconfigured homepage: they are a fallback, not a floor. Gating this on
+     the campaign rather than on its CTA is the whole point — with `none` chosen
+     deliberately, an empty row is the answer, and leaving "View the collection"
+     standing would be the site overriding Saima.
+
+     The row is emptied and hidden rather than left in place, because .hero-copy
+     is a flex column with a 30px gap and an empty child still takes one. */
+  var row = $('.hero-copy .btnrow');
+  if (row) {
+    row.innerHTML = c.cta
+      ? '<a class="pill pill-dark" id="campaign-cta" href="' + esc(c.cta.href) + '">'
+        + esc(c.cta.label) + '</a>'
+      : '';
+    row.classList.toggle('hidden', !c.cta);
   }
 
   /* One file, no responsive renditions — campaign media is app-managed and
