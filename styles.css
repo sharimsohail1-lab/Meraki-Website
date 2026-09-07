@@ -79,6 +79,13 @@ header{position:sticky;top:0;z-index:60;background:rgba(251,248,244,.9);
   min-width:200px;max-width:min(78vw,320px);margin:0;padding:9px 0;list-style:none;
   background:var(--ground);border:1px solid rgba(42,31,34,.1);
   box-shadow:0 16px 38px rgba(24,16,18,.10)}
+/* The panel is set 15px below the trigger, and .navmenu is only as tall as the
+   trigger — so that 15px belonged to neither, and a pointer travelling down to
+   the first item left the group and closed the menu before it arrived. This
+   bridges the gap: invisible, no layout or styling effect, and it makes the
+   journey from trigger to item continuous inside .navmenu rather than papering
+   over the problem with a close delay. */
+.navmenu-list::before{content:'';position:absolute;left:0;right:0;top:-15px;height:15px}
 .navmenu-item{display:block;padding:10px 18px;color:var(--ink);
   font:400 10.5px/1.45 var(--sans);letter-spacing:.16em;text-transform:uppercase;
   transition:background .2s}

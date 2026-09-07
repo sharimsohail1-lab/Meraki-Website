@@ -55,6 +55,13 @@ var IMAGE_COLUMNS = [
   'is_primary', 'show_on_website', 'alt_text', 'width', 'height', 'variants'
 ].join(',');
 
+/* Collection membership, normalised app-side in migration 028. Two switches
+   decide whether a membership is public: the collection's own, and this
+   product's within it — a piece can sit in three collections internally and be
+   shown in only one. `collections!inner` because a membership pointing at a
+   collection that no longer exists is not a membership. */
+var COLLECTION_COLUMNS = 'product_id,show_on_website,collections!inner(name,show_on_website)';
+
 /* ---------------------------------------------------------------------------
  * Supabase REST. No SDK — one authenticated GET is all this needs, and the repo
  * stays dependency-free and buildless.
@@ -136,16 +143,65 @@ function readPublishedProducts() {
       + '&show_on_website=is.true'
       + '&order=sort_order.asc';
 
-    return supabaseSelect(imagePath).then(function (images) {
-      var byProduct = {};
+    /* Both follow-ups go out together: neither depends on the other, so the
+       endpoint still costs one round trip's worth of waiting. */
+    return Promise.all([
+      supabaseSelect(imagePath),
+      readCollectionMemberships(ids)
+    ]).then(function (results) {
+      var images = results[0] || [];
+      var memberships = results[1];
+
+      var imagesByProduct = {};
       images.forEach(function (img) {
-        (byProduct[img.product_id] = byProduct[img.product_id] || []).push(img);
+        (imagesByProduct[img.product_id] = imagesByProduct[img.product_id] || []).push(img);
       });
+
+      /* null means the tables are not there to read — every product then falls
+         back to its legacy array, which is what the site did before this. */
+      var membershipsByProduct = null;
+      if (memberships) {
+        membershipsByProduct = {};
+        memberships.forEach(function (m) {
+          (membershipsByProduct[m.product_id] = membershipsByProduct[m.product_id] || []).push(m);
+        });
+      }
+
       return products.map(function (p) {
-        p.images = byProduct[p.id] || [];
+        p.images = imagesByProduct[p.id] || [];
+        p.collection_memberships = membershipsByProduct
+          ? (membershipsByProduct[p.id] || [])
+          : null;
         return p;
       });
     });
+  });
+}
+
+/* Every membership row for these products, visible or not — the filtering is
+   done in code so that "this product has no normalised rows at all" stays
+   distinguishable from "all of its rows are hidden". The first is a legacy
+   product that must keep working; the second is a deliberate choice by Saima.
+
+   A database that has not run migration 028 has neither table. That is not an
+   outage and must not blank the storefront, so a missing relation resolves to
+   null and every product falls back to its legacy array. Any other failure —
+   a real outage, a bad key — is rethrown and the endpoint fails honestly. */
+function readCollectionMemberships(ids) {
+  var path = 'product_collections'
+    + '?select=' + encodeURIComponent(COLLECTION_COLUMNS)
+    + '&product_id=in.(' + ids + ')';
+
+  return supabaseSelect(path).catch(function (err) {
+    var message = String((err && err.message) || '');
+    var absent = message.indexOf('42P01') !== -1
+      || message.indexOf('does not exist') !== -1
+      || message.indexOf('schema cache') !== -1;
+    if (!absent) throw err;
+    if (console && console.warn) {
+      console.warn('[api/products] product_collections not present; using legacy collection_names');
+    }
+    return null;
   });
 }
 
@@ -187,6 +243,37 @@ function collectionNames(row) {
   if (row.collection_name && names.indexOf(row.collection_name) === -1) {
     names = [row.collection_name].concat(names);
   }
+  return names;
+}
+
+/* The collections this product may be shown in publicly — the only collection
+   information that crosses this boundary.
+ *
+ * Two switches must both allow it: the collection is live, and this product's
+ * membership in it is live. Either one off and the name simply is not here, so
+ * the storefront cannot navigate to it, list it, or count it. Hidden
+ * memberships are not sent and then filtered in the browser; they never leave
+ * the server.
+ *
+ * Absence is read as permission throughout, matching how the app backfilled
+ * migration 028 and how is_archived already behaves here: only an explicit
+ * false hides anything. A product with no normalised rows at all is a legacy
+ * product the app has not touched yet, and falls back to its array — the point
+ * being that nobody's collection disappears because a join row was never
+ * written. */
+function publicCollectionNames(row) {
+  var rows = row.collection_memberships;
+  if (!Array.isArray(rows) || !rows.length) return collectionNames(row);
+
+  var names = [];
+  rows.forEach(function (m) {
+    if (!m || m.show_on_website === false) return;
+    var collection = m.collections;
+    if (!collection || collection.show_on_website === false) return;
+    var name = String(collection.name == null ? '' : collection.name).trim();
+    if (!name || names.indexOf(name) !== -1) return;
+    names.push(name);
+  });
   return names;
 }
 
@@ -246,7 +333,7 @@ function publicProduct(row) {
     description: row.description_en || '',
     price: typeof row.price === 'number' ? row.price : null,
     currency: 'USD',
-    collection_names: collectionNames(row),
+    collection_names: publicCollectionNames(row),
 
     availability: AVAILABILITY_VALUES.indexOf(row.website_availability) === -1
       ? null : row.website_availability,
@@ -324,4 +411,5 @@ module.exports.isStorefrontVisible = isStorefrontVisible;
 module.exports.publicImage = publicImage;
 module.exports.availableSizeLabels = availableSizeLabels;
 module.exports.collectionNames = collectionNames;
+module.exports.publicCollectionNames = publicCollectionNames;
 module.exports.variantUrls = variantUrls;
