@@ -60,6 +60,16 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
         </button>
         <ul class="navmenu-list hidden" id="collections-list"></ul>
       </div>
+      <!-- Edits are curated selections that cross collections, so they get their
+           own way in rather than hiding inside Collections. Hidden until there
+           is at least one public edit worth offering. -->
+      <div class="navmenu hidden" id="edits-menu">
+        <button class="navlink navmenu-btn" id="edits-toggle" type="button"
+                aria-expanded="false" aria-controls="edits-list">
+          Edits<span class="chev" aria-hidden="true"></span>
+        </button>
+        <ul class="navmenu-list hidden" id="edits-list"></ul>
+      </div>
       <a class="navlink" href="#/ready">Ready Now</a>
       <a class="navlink" href="#/made-to-order">Made to Order</a>
       <a class="navlink" href="#/story">Our Story</a>
@@ -86,6 +96,10 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
             aria-expanded="false" aria-controls="mob-collections-list">
       Collections<span class="chev" aria-hidden="true"></span>
     </button>
+    <button class="navlink mobnav-btn hidden" id="mob-edits-toggle" type="button"
+            aria-expanded="false" aria-controls="mob-edits-list">
+      Edits<span class="chev" aria-hidden="true"></span>
+    </button>
     <a class="navlink" href="#/ready">Ready Now</a>
     <a class="navlink" href="#/made-to-order">Made to Order</a>
     <a class="navlink" href="#/story">Our Story</a>
@@ -93,6 +107,7 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
   <!-- Outside the scrolling strip on purpose: .mobnav scrolls horizontally, and
        a panel inside it would be clipped by that overflow. -->
   <div class="mobcollections hidden" id="mob-collections-list"></div>
+  <div class="mobcollections hidden" id="mob-edits-list"></div>
 </header>
 
 <main>

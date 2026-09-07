@@ -545,6 +545,44 @@ function collectionNavHTML() {
   return items.join('');
 }
 
+/* An edit is offered only when a visitor could actually use it: the app has
+   published it (the endpoint already filtered on show_on_website), and at least
+   one of its pieces is still live. An edit whose garments have all been retired
+   is a heading over an empty page, so it is not put in front of anyone. */
+function publicEdits() {
+  return (CURATED_EDITS || []).filter(function (e) {
+    if (!e || blank(e.slug) || blank(e.title)) return false;
+    return (e.product_ids || []).some(function (id) { return !!findProductById(id); });
+  });
+}
+
+function editNavHTML(edits) {
+  return edits.map(function (e) {
+    return '<li><a class="navmenu-item" href="#/edit/' + esc(String(e.slug).trim()) + '"'
+      + ' data-edit="' + esc(String(e.slug).trim()) + '">' + esc(e.title) + '</a></li>';
+  }).join('');
+}
+
+function renderEditsNav() {
+  var edits = publicEdits();
+  var html = editNavHTML(edits);
+  var has = edits.length > 0;
+
+  ['edits-menu', 'mob-edits-toggle'].forEach(function (id) {
+    var el = byId(id);
+    if (el) el.classList.toggle('hidden', !has);
+  });
+  var desktop = byId('edits-list');
+  var mobile = byId('mob-edits-list');
+  if (desktop) desktop.innerHTML = html;
+  if (mobile) mobile.innerHTML = '<ul class="navmenu-list-inner">' + html + '</ul>';
+  /* Nothing to offer means the panels close with the control. */
+  if (!has) {
+    if (desktop) desktop.classList.add('hidden');
+    if (mobile) mobile.classList.add('hidden');
+  }
+}
+
 function renderCollectionNav() {
   var html = collectionNavHTML();
   var desktop = byId('collections-list');
@@ -627,6 +665,52 @@ function featuredEditProducts(cfg) {
   return out.slice(0, cfg.count > 0 ? cfg.count : 0);
 }
 
+/* What a configured featured edit is called.
+ *
+ * The heading the app was given, first. Failing that, the edit its link leads
+ * to — a block that says "shop these" and points at Eid Picks is called Eid
+ * Picks, and that name is already in the payload.
+ *
+ * Failing both, a generic label. Specifically NOT the words sitting in the
+ * markup: those are the unconfigured homepage's editorial copy, they name a
+ * real collection, and letting them stand over an arbitrary configured
+ * selection tells the visitor the pieces are something they are not. An
+ * untitled edit is generic; it is not that collection. */
+function featuredEditTitle(cfg) {
+  if (!blank(cfg.heading)) return String(cfg.heading).trim();
+  if (cfg.cta && !blank(cfg.cta.href)) {
+    var m = /^#\/edit\/(.+)$/.exec(String(cfg.cta.href).trim());
+    var linked = m ? findEditBySlug(m[1]) : null;
+    if (linked && !blank(linked.title)) return String(linked.title).trim();
+  }
+  return 'Featured Collection';
+}
+
+/* The homepage's movable sections, in the order the app asked for. The DOM
+   carries the website's own order; this rearranges it rather than re-rendering,
+   so nothing is built twice and a section that is not mentioned keeps working.
+   Sections that render nothing are already hidden by their own renderers, so a
+   disabled one leaves no gap here either. */
+var SECTION_NODES = { campaign: '.hero', featured_edit: '#featured', new_arrivals: '#new-arrivals' };
+
+function applySectionOrder() {
+  var order = HOMEPAGE && HOMEPAGE.section_order;
+  if (!order || !order.length) return;
+  var home = byId('view-home');
+  if (!home) return;
+  /* Anchored on the first section rather than the top of the view: everything
+     below these three — the story, the made-to-order panel, the closing
+     invitation — is the website's and does not move. */
+  var nodes = order.map(function (k) { return $(SECTION_NODES[k]); }).filter(Boolean);
+  if (!nodes.length) return;
+  var anchor = nodes[0];
+  home.insertBefore(anchor, home.firstChild);
+  nodes.slice(1).forEach(function (n) {
+    anchor.parentNode.insertBefore(n, anchor.nextSibling);
+    anchor = n;
+  });
+}
+
 function renderHomeSections() {
   var edit = homepageBlock('featured_edit');
   var arrivalsCfg = homepageBlock('new_arrivals');
@@ -639,7 +723,7 @@ function renderHomeSections() {
   section.classList.toggle('hidden', featured.length === 0);
   byId('featured-grid').innerHTML = featured.map(function (p) { return cardHTML(p); }).join('');
 
-  if (edit && !blank(edit.heading)) byId('featured-title').textContent = edit.heading;
+  if (edit) byId('featured-title').textContent = featuredEditTitle(edit);
   var sub = byId('featured-sub');
   var subtitle = edit ? edit.subtitle : null;
   sub.textContent = blank(subtitle) ? '' : subtitle;
@@ -786,6 +870,8 @@ function placeCampaignCta(c) {
 function renderGrids() {
   renderHero();
   renderCampaign();
+  renderEditsNav();
+  applySectionOrder();
   renderCollectionNav();
   renderHomeSections();
 
@@ -1845,6 +1931,12 @@ function setupCollectionMenus() {
     { btn: byId('collections-toggle'), panel: byId('collections-list'),
       wrap: byId('collections-menu'), hover: true },
     { btn: byId('mob-collections-toggle'), panel: byId('mob-collections-list'),
+      wrap: null, hover: false },
+    /* The same control, not a second implementation of it — including the gap
+       bridge that stopped the first one closing under a travelling pointer. */
+    { btn: byId('edits-toggle'), panel: byId('edits-list'),
+      wrap: byId('edits-menu'), hover: true },
+    { btn: byId('mob-edits-toggle'), panel: byId('mob-edits-list'),
       wrap: null, hover: false }
   ].filter(function (m) { return m.btn && m.panel; });
 
