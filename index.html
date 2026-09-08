@@ -70,6 +70,10 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
         </button>
         <ul class="navmenu-list hidden" id="edits-list"></ul>
       </div>
+      <!-- With a single public edit there is nothing to choose between, so it
+           is offered by name instead of behind a menu. Written by
+           renderEditsNav(); one of these two is ever visible. -->
+      <a class="navlink navlink-edit hidden" id="edits-direct" href="#/collection"></a>
       <a class="navlink" href="#/ready">Ready Now</a>
       <a class="navlink" href="#/made-to-order">Made to Order</a>
       <a class="navlink" href="#/story">Our Story</a>
@@ -100,6 +104,7 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
             aria-expanded="false" aria-controls="mob-edits-list">
       Edits<span class="chev" aria-hidden="true"></span>
     </button>
+    <a class="navlink navlink-edit hidden" id="mob-edits-direct" href="#/collection"></a>
     <a class="navlink" href="#/ready">Ready Now</a>
     <a class="navlink" href="#/made-to-order">Made to Order</a>
     <a class="navlink" href="#/story">Our Story</a>

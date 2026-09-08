@@ -563,24 +563,53 @@ function editNavHTML(edits) {
   }).join('');
 }
 
+/* How the edits are offered depends on how many there are.
+ *
+ * None, and the header says nothing — no control, no placeholder, no gap.
+ *
+ * One, and it is named outright. A menu that opens to reveal a single choice
+ * asks the visitor to do work to learn something the header could simply have
+ * told them, and hides the only edit behind a word — "Edits" — that says
+ * nothing about it.
+ *
+ * Two or more, and the menu earns its place: it is the Collections control
+ * again, hover bridge and all, not a second implementation. */
 function renderEditsNav() {
   var edits = publicEdits();
-  var html = editNavHTML(edits);
-  var has = edits.length > 0;
+  var single = edits.length === 1 ? edits[0] : null;
+  var menu = edits.length > 1;
+
+  var desktop = byId('edits-list');
+  var mobile = byId('mob-edits-list');
+  if (desktop) desktop.innerHTML = menu ? editNavHTML(edits) : '';
+  if (mobile) mobile.innerHTML = menu ? '<ul class="navmenu-list-inner">' + editNavHTML(edits) + '</ul>' : '';
 
   ['edits-menu', 'mob-edits-toggle'].forEach(function (id) {
     var el = byId(id);
-    if (el) el.classList.toggle('hidden', !has);
+    if (el) el.classList.toggle('hidden', !menu);
   });
-  var desktop = byId('edits-list');
-  var mobile = byId('mob-edits-list');
-  if (desktop) desktop.innerHTML = html;
-  if (mobile) mobile.innerHTML = '<ul class="navmenu-list-inner">' + html + '</ul>';
-  /* Nothing to offer means the panels close with the control. */
-  if (!has) {
-    if (desktop) desktop.classList.add('hidden');
-    if (mobile) mobile.classList.add('hidden');
+  /* A control that has just been hidden must not leave its panel open behind
+     it, and neither panel should stay open across a change of shape. */
+  if (!menu) {
+    [desktop, mobile].forEach(function (el) { if (el) el.classList.add('hidden'); });
+    ['edits-toggle', 'mob-edits-toggle'].forEach(function (id) {
+      var b = byId(id);
+      if (b) b.setAttribute('aria-expanded', 'false');
+    });
   }
+
+  ['edits-direct', 'mob-edits-direct'].forEach(function (id) {
+    var el = byId(id);
+    if (!el) return;
+    el.classList.toggle('hidden', !single);
+    if (!single) return;
+    el.textContent = single.title;
+    el.setAttribute('href', '#/edit/' + String(single.slug).trim());
+    /* The visible text is uppercased by the stylesheet; the title as written is
+       what a screen reader should hear, and what a long name is truncated
+       from — so it is kept intact here rather than only in the label. */
+    el.setAttribute('title', single.title);
+  });
 }
 
 function renderCollectionNav() {

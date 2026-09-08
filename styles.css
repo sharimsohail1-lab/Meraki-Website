@@ -433,3 +433,17 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
      campaign is not integrated with anything. */
   .hero-img{min-height:clamp(330px,56vh,540px)}
 }
+
+/* A single edit is named outright in the header. Edit titles are the operator's
+   words and can run long, so this one nav item is allowed to truncate rather
+   than push the header around — the full title stays in the tooltip and in the
+   accessibility tree. */
+.navlink-edit{flex:0 0 auto;display:inline-block;max-width:22ch;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+/* The compact strip makes its links flex containers to fill the bar's height,
+   which collapses an ellipsis element to nothing. This one stays inline-block
+   and takes the bar's height from its own padding instead. */
+@media(max-width:899px){
+  .mobnav .navlink.navlink-edit{display:inline-block;max-width:18ch;
+    padding:11px 0 12px;margin:-11px 0 -12px;line-height:15px}
+}
