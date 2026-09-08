@@ -556,59 +556,29 @@ function publicEdits() {
   });
 }
 
+/* Every public edit is named outright in the header, at the same level as
+   Collections — the same type, the same weight, the same spacing. An edit is a
+   destination, not a category, and putting a handful of them behind a word that
+   says nothing about any of them ("Edits") asks the visitor to open a menu to
+   learn what could simply have been shown.
+
+   Order is whatever the payload supplies; nothing here sorts it, because a
+   sort would be this file inventing a merchandising priority that belongs to
+   the app. */
 function editNavHTML(edits) {
   return edits.map(function (e) {
-    return '<li><a class="navmenu-item" href="#/edit/' + esc(String(e.slug).trim()) + '"'
-      + ' data-edit="' + esc(String(e.slug).trim()) + '">' + esc(e.title) + '</a></li>';
+    var slug = String(e.slug).trim();
+    return '<a class="navlink navlink-edit" href="#/edit/' + esc(slug) + '"'
+      + ' data-edit="' + esc(slug) + '" title="' + esc(e.title) + '">'
+      + esc(e.title) + '</a>';
   }).join('');
 }
 
-/* How the edits are offered depends on how many there are.
- *
- * None, and the header says nothing — no control, no placeholder, no gap.
- *
- * One, and it is named outright. A menu that opens to reveal a single choice
- * asks the visitor to do work to learn something the header could simply have
- * told them, and hides the only edit behind a word — "Edits" — that says
- * nothing about it.
- *
- * Two or more, and the menu earns its place: it is the Collections control
- * again, hover bridge and all, not a second implementation. */
 function renderEditsNav() {
-  var edits = publicEdits();
-  var single = edits.length === 1 ? edits[0] : null;
-  var menu = edits.length > 1;
-
-  var desktop = byId('edits-list');
-  var mobile = byId('mob-edits-list');
-  if (desktop) desktop.innerHTML = menu ? editNavHTML(edits) : '';
-  if (mobile) mobile.innerHTML = menu ? '<ul class="navmenu-list-inner">' + editNavHTML(edits) + '</ul>' : '';
-
-  ['edits-menu', 'mob-edits-toggle'].forEach(function (id) {
+  var html = editNavHTML(publicEdits());
+  ['edits-nav', 'mob-edits-nav'].forEach(function (id) {
     var el = byId(id);
-    if (el) el.classList.toggle('hidden', !menu);
-  });
-  /* A control that has just been hidden must not leave its panel open behind
-     it, and neither panel should stay open across a change of shape. */
-  if (!menu) {
-    [desktop, mobile].forEach(function (el) { if (el) el.classList.add('hidden'); });
-    ['edits-toggle', 'mob-edits-toggle'].forEach(function (id) {
-      var b = byId(id);
-      if (b) b.setAttribute('aria-expanded', 'false');
-    });
-  }
-
-  ['edits-direct', 'mob-edits-direct'].forEach(function (id) {
-    var el = byId(id);
-    if (!el) return;
-    el.classList.toggle('hidden', !single);
-    if (!single) return;
-    el.textContent = single.title;
-    el.setAttribute('href', '#/edit/' + String(single.slug).trim());
-    /* The visible text is uppercased by the stylesheet; the title as written is
-       what a screen reader should hear, and what a long name is truncated
-       from — so it is kept intact here rather than only in the label. */
-    el.setAttribute('title', single.title);
+    if (el) el.innerHTML = html;
   });
 }
 
@@ -1961,12 +1931,6 @@ function setupCollectionMenus() {
     { btn: byId('collections-toggle'), panel: byId('collections-list'),
       wrap: byId('collections-menu'), hover: true },
     { btn: byId('mob-collections-toggle'), panel: byId('mob-collections-list'),
-      wrap: null, hover: false },
-    /* The same control, not a second implementation of it — including the gap
-       bridge that stopped the first one closing under a travelling pointer. */
-    { btn: byId('edits-toggle'), panel: byId('edits-list'),
-      wrap: byId('edits-menu'), hover: true },
-    { btn: byId('mob-edits-toggle'), panel: byId('mob-edits-list'),
       wrap: null, hover: false }
   ].filter(function (m) { return m.btn && m.panel; });
 
