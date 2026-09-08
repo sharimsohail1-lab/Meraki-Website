@@ -121,18 +121,26 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
          the tap navigated away instead of starting playback. Only the caption
          navigates now, so the browser's own play behaviour is left alone.
 
+         The film's address is in data-src, not in a <source>, and there is no
+         poster attribute either. Both are deliberate: a src here would be
+         fetched by the browser's preload scanner while the HTML is still being
+         parsed — before any script has run, and long before the site knows
+         whether a campaign has replaced this hero. On a visit where a campaign
+         is live that is a several-megabyte download of a film nobody sees, plus
+         a visible flip from this hero to that one. Nothing is requested until
+         activateDefaultHero() decides this hero is the one being shown.
+
          The signed Storage URL is written verbatim and expires in about a
          year. It carries no ampersands, so nothing needs entity-escaping, and
          the %20 in the filename is already percent-encoding — re-encoding or
-         decoding it would address a different object. The poster is the
-         photograph that was already here, so there is no blank rectangle while
-         the film loads and no new asset to ship. -->
+         decoding it would address a different object. -->
     <div class="hero-img hero-film">
-      <video id="hero-video" poster="img/p5.webp"
-             autoplay muted loop playsinline preload="auto"
+      <video id="hero-video"
+             muted loop playsinline preload="none"
              disablepictureinpicture disableremoteplayback
+             data-poster="img/p5.webp"
+             data-src="https://mtjfnfwvpqjxddgxlbgx.supabase.co/storage/v1/object/sign/collection-video/Roselle%20V2.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lZTg5NTYyYS1jYjg0LTQzZDAtYWYzOS1iNmJmMjcyNTVlM2IiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJjb2xsZWN0aW9uLXZpZGVvL1Jvc2VsbGUgVjIubXA0Iiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4NjgxOTI3NCwiZXhwIjoxODE4MzU1Mjc0fQ.-Wc_PDFiLWa7pU29ebj9eI3PcHQ4mzVuLzJg9yP1lB8"
              aria-label="The Roselle Collection film">
-        <source src="https://mtjfnfwvpqjxddgxlbgx.supabase.co/storage/v1/object/sign/collection-video/Roselle%20V2.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lZTg5NTYyYS1jYjg0LTQzZDAtYWYzOS1iNmJmMjcyNTVlM2IiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJjb2xsZWN0aW9uLXZpZGVvL1Jvc2VsbGUgVjIubXA0Iiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4NjgxOTI3NCwiZXhwIjoxODE4MzU1Mjc0fQ.-Wc_PDFiLWa7pU29ebj9eI3PcHQ4mzVuLzJg9yP1lB8" type="video/mp4">
       </video>
       <p class="film-tag"><a class="film-cta" href="#/collection" aria-label="Roselle Collection — view the collection">Roselle Collection</a></p>
     </div>
