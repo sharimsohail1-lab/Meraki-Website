@@ -33,6 +33,9 @@ var OPTIONAL_SETTINGS_COLUMNS = ['homepage_config'];
 var THEMES = ['default', 'festive', 'bridal'];
 var CTA_TYPES = ['none', 'collection', 'curated_edit', 'view_all'];
 var SOURCE_TYPES = ['collection', 'products', 'new_arrivals'];
+/* The homepage's movable sections. Anything outside this list is a key the
+   website does not know how to render, and is dropped rather than guessed at. */
+var SECTION_KEYS = ['campaign', 'featured_edit', 'new_arrivals'];
 var COUNT_MIN = 3;
 var COUNT_MAX = 8;
 
@@ -170,6 +173,13 @@ function publicCampaign(raw, ctx) {
     cta: resolveCta(raw, ctx)
   };
 
+  /* The explicit switch outranks everything. Turned off, the campaign is not a
+     campaign the storefront should show, whatever content it still holds — the
+     default hero takes the hero back. Absent, this is a configuration written
+     before the flag existed, and the old rule stands: content makes it live.
+     Once the flag exists, presence of fields is no longer evidence either way. */
+  if (raw.show === false) return null;
+
   /* A block carrying only its own defaults is not a campaign — it is an
      untouched form. The hero that is already there stays. */
   var says = campaign.heading || campaign.subheading || campaign.media_url || campaign.cta;
@@ -197,6 +207,28 @@ function publicFeaturedEdit(raw, ctx) {
   };
 }
 
+/* The order the app wants the homepage's sections in.
+ *
+ * Unknown keys are dropped, repeats are ignored, and anything the app did not
+ * mention is appended in the website's own order — so a configuration that
+ * names one section still gets a complete, sane page rather than a page with
+ * two sections missing. A configuration with no order at all yields null, and
+ * the storefront keeps the order it has always had. */
+function publicSectionOrder(raw) {
+  if (!Array.isArray(raw)) return null;
+  var seen = {};
+  var order = [];
+  raw.forEach(function (k) {
+    var key = text(k);
+    if (!key || SECTION_KEYS.indexOf(key) === -1 || seen[key]) return;
+    seen[key] = true;
+    order.push(key);
+  });
+  if (!order.length) return null;
+  SECTION_KEYS.forEach(function (k) { if (!seen[k]) order.push(k); });
+  return order;
+}
+
 function publicNewArrivals(raw) {
   if (!isObject(raw)) return null;
   return {
@@ -216,6 +248,7 @@ function publicHomepage(rawConfig, ctx) {
   var cfg = parseJson(rawConfig);
   if (!isObject(cfg) || Object.keys(cfg).length === 0) return null;
   return {
+    section_order: publicSectionOrder(cfg.section_order),
     campaign: publicCampaign(cfg.campaign, ctx),
     featured_edit: publicFeaturedEdit(cfg.featured_edit, ctx),
     new_arrivals: publicNewArrivals(cfg.new_arrivals)
@@ -354,3 +387,4 @@ module.exports.publicSettings = publicSettings;
 module.exports.publicHomepage = publicHomepage;
 module.exports.resolveCta = resolveCta;
 module.exports.clampCount = clampCount;
+module.exports.publicSectionOrder = publicSectionOrder;

@@ -60,6 +60,9 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
         </button>
         <ul class="navmenu-list hidden" id="collections-list"></ul>
       </div>
+      <!-- Every public edit, named outright, at the same level as Collections.
+           Written by renderEditsNav(); empty and invisible when there are none. -->
+      <span class="edits-nav" id="edits-nav"></span>
       <a class="navlink" href="#/ready">Ready Now</a>
       <a class="navlink" href="#/made-to-order">Made to Order</a>
       <a class="navlink" href="#/story">Our Story</a>
@@ -86,6 +89,7 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
             aria-expanded="false" aria-controls="mob-collections-list">
       Collections<span class="chev" aria-hidden="true"></span>
     </button>
+    <span class="edits-nav" id="mob-edits-nav"></span>
     <a class="navlink" href="#/ready">Ready Now</a>
     <a class="navlink" href="#/made-to-order">Made to Order</a>
     <a class="navlink" href="#/story">Our Story</a>
