@@ -1543,15 +1543,16 @@ document.addEventListener('click', function (e) {
   var nav = e.target.closest('[data-nav]');
   if (nav) { location.hash = nav.dataset.nav; return; }
 
-  /* A thumbnail does both: it becomes the main photograph, so closing the
-     viewer leaves the page on the shot the visitor last looked at, and it
-     opens the viewer at that same shot. */
+  /* A thumbnail chooses the photograph; it does not open the viewer.
+     Doing both meant a visitor who only wanted to see another angle was put
+     into a full-screen viewer they had to dismiss — a tap to look became two
+     taps and a way back out. Choosing and magnifying are separate intentions,
+     so they are separate gestures: the thumbnail sets the main image, and the
+     main image is what opens the viewer. */
   var shot = e.target.closest('[data-shot]');
   if (shot) {
-    var i = Number(shot.dataset.shot);
-    state.shot = i;
+    state.shot = Number(shot.dataset.shot);
     renderProduct();
-    openLightbox(currentGalleryShots(), i, shot);
     return;
   }
 
