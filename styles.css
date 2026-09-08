@@ -40,7 +40,7 @@ header{position:sticky;top:0;z-index:60;background:rgba(251,248,244,.9);
    all. The gap is a little tighter than it was to buy room for edit links, and
    min-width:0 with nowrap content would spill over the wordmark, so the row
    clips as a last resort instead. */
-.hdr nav{flex:1 1 0;display:flex;gap:20px;align-items:center;min-width:0;overflow:hidden}
+.hdr nav{flex:1 1 0;display:flex;gap:18px;align-items:center;min-width:0;overflow:hidden}
 .hdr .brand{flex:0 0 auto}
 .hdr .brand img{height:clamp(38px,5.2vw,52px);width:auto;mix-blend-mode:multiply}
 /* The wordmark reads too small against the navigation on a wide screen. Desktop
@@ -462,7 +462,12 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
    cap sized to the real thing lets ordinary titles through whole.
    flex:0 1 auto so the edits are what give way when the row runs out of room,
    rather than the nav pushing into the wordmark. */
-.navlink-edit{flex:0 1 auto;min-width:5.5em;display:inline-block;max-width:190px;
+/* Never shrink below the words. flex-shrink:1 with a min-width let the row
+   squeeze every edit down to that floor when space got tight, so "Eid Picks" —
+   nine characters, narrower than "Ready Now" beside it — came out as "Eid Pi…".
+   Short titles now take exactly the width they need; the cap is what bites, and
+   only on a name genuinely too long for a nav row. */
+.navlink-edit{flex:0 0 auto;display:inline-block;max-width:190px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
 /* The compact strip makes its links flex containers to fill the bar's height,
    which collapses an ellipsis element to nothing. These stay inline-block and
