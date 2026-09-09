@@ -237,6 +237,10 @@ function mapProduct(raw) {
     sizes: sizes,
     details: mapGarmentDetails(raw.garment_details),
     images: mapImages(raw.images, raw.name || ''),
+    /* The same mapping as the gallery — same variants, same truthful width
+       descriptors, same master fallback — but a separate array, so nothing
+       downstream can reach one set while meaning the other. */
+    customerPhotos: mapImages(raw.customer_photos, raw.name || ''),
     publishedAt: raw.published_at || null
   };
 }
@@ -964,6 +968,35 @@ function renderGrids() {
 }
 
 /* ---------- product ---------- */
+var SEEN_SIZES = '(max-width:640px) 45vw, (max-width:1100px) 30vw, 240px';
+
+/* Photographs customers sent in.
+ *
+ * Shown on the page rather than behind a control: a trust signal nobody opens
+ * is not a trust signal. Nothing is said about who they are — no name, no
+ * quote, no place — because the app supplies an approved image and nothing
+ * else, and inventing the rest would be inventing the customer.
+ *
+ * With none, the section leaves no trace: the heading, the grid and the space
+ * they would occupy are all gone, and the page reads exactly as it did before
+ * any of this existed. */
+function renderCustomerPhotos(p) {
+  var section = byId('pdp-seen');
+  var grid = byId('pdp-seen-grid');
+  if (!section || !grid) return;
+
+  var shots = (p && p.customerPhotos) || [];
+  section.classList.toggle('hidden', shots.length === 0);
+  if (!shots.length) { grid.innerHTML = ''; return; }
+
+  grid.innerHTML = shots.map(function (img, i) {
+    return '<button class="seen-shot" type="button" data-seen="' + i + '"'
+      + ' aria-label="View customer photograph ' + (i + 1) + ' of ' + shots.length + '">'
+      + imgHTML(img, SEEN_SIZES, 'loading="lazy" decoding="async"')
+      + '</button>';
+  }).join('');
+}
+
 function renderProduct() {
   var p = findProductBySlug(state.slug);
 
@@ -982,11 +1015,13 @@ function renderProduct() {
     stateEl.classList.remove('hidden');
     pdp.classList.add('hidden');
     also.classList.add('hidden');
+    byId('pdp-seen').classList.add('hidden');
     return;
   }
   stateEl.classList.add('hidden');
   pdp.classList.remove('hidden');
   also.classList.remove('hidden');
+  renderCustomerPhotos(p);
 
   /* A different piece means none of the previous piece's gallery state applies
      — not the viewer's photographs, not its index, not a half-finished swipe,
@@ -1454,6 +1489,15 @@ function stepLightbox(delta) {
   renderLightbox();
 }
 
+/* The customer photographs of the piece currently on screen. Deliberately its
+   own accessor beside currentGalleryShots(): the two sets are never appended,
+   never interleaved, and the viewer is handed one or the other — so stepping
+   through customer photographs cannot wander into the studio ones. */
+function currentCustomerShots() {
+  var p = findProductBySlug(state.slug);
+  return (p && p.customerPhotos) || [];
+}
+
 /* The photographs of the piece currently on screen. */
 function currentGalleryShots() {
   var p = findProductBySlug(state.slug);
@@ -1571,6 +1615,15 @@ document.addEventListener('click', function (e) {
      taps and a way back out. Choosing and magnifying are separate intentions,
      so they are separate gestures: the thumbnail sets the main image, and the
      main image is what opens the viewer. */
+  /* Customer photographs open into the same viewer with their own set. The
+     studio photographs are not appended, so next and previous stay inside the
+     photographs customers actually sent. */
+  var seen = e.target.closest('[data-seen]');
+  if (seen) {
+    openLightbox(currentCustomerShots(), Number(seen.dataset.seen), seen);
+    return;
+  }
+
   var shot = e.target.closest('[data-shot]');
   if (shot) {
     state.shot = Number(shot.dataset.shot);
