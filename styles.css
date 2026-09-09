@@ -287,7 +287,20 @@ h1.pname{margin:0;font:300 clamp(30px,3.6vw,46px)/1.1 var(--serif);letter-spacin
 .specs{margin-top:10px;border-top:1px solid rgba(42,31,34,.13)}
 .specs div{display:flex;gap:20px;padding:15px 0;border-bottom:1px solid rgba(42,31,34,.13)}
 .specs .k{margin:0;flex:0 0 116px;font:300 10px/1.6 var(--sans);letter-spacing:.18em;text-transform:uppercase;color:var(--soft)}
-.specs .v{margin:0;flex:1 1 auto;font:300 13.5px/1.7 var(--sans)}
+/* min-width:0 lets a long list wrap inside the row instead of forcing it wider,
+   and break-word is there only for a value with no spaces to break on. */
+.specs .v{margin:0;flex:1 1 auto;min-width:0;overflow-wrap:break-word;
+  font:300 13.5px/1.7 var(--sans)}
+/* On a phone the two columns stop being columns. "Recommended Occasion" is a
+   long label against a narrow screen: side by side at 320px it left the value
+   144px — less room than the label beside it — and five colours came out as
+   three ragged lines. Stacked, the label keeps its line and the value gets the
+   full width. The rules stay, so it still reads as a specification rather than
+   a paragraph. */
+@media(max-width:430px){
+  .specs div{display:block;padding:13px 0}
+  .specs .k{margin:0 0 5px}
+}
 .also{margin-top:clamp(56px,8vw,110px);max-width:1240px;margin-left:auto;margin-right:auto}
 .also>p{margin:0 0 26px;font:300 10.5px/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:var(--soft)}
 

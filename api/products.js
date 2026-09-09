@@ -45,7 +45,29 @@ var PRODUCT_COLUMNS = [
    yet is a hard 400, so these are requested optimistically and dropped on the
    one retry if the database says it has never heard of them. When the migration
    lands the field starts flowing with no change here. */
-var OPTIONAL_PRODUCT_COLUMNS = ['fulfillment_note'];
+var OPTIONAL_PRODUCT_COLUMNS = ['fulfillment_note', 'garment_details'];
+
+/* The garment specification, in the order it reads on the page, with the words
+   the customer actually sees. The key is the app's; the label is ours.
+   `color` carries a British label over an American key on purpose — the key is
+   the contract and renaming it would break the app, but nobody shopping a
+   Pakistani womenswear label should be shown "Color". */
+var SPEC_ROWS = [
+  ['fabric',   'Fabric'],
+  ['pieces',   'Pieces'],
+  ['color',    'Colour'],
+  ['made',     'Made'],
+  ['care',     'Care'],
+  ['occasion', 'Recommended Occasion'],
+  ['style',    'Style / Silhouette']
+];
+
+/* The five that existed before the app had a canonical descriptor object, and
+   the only five a legacy row can speak to. Occasion and style have never had a
+   scalar column, so a product that predates the migration simply has nothing to
+   say about them — inferring either from the old fields would be inventing
+   merchandising copy. */
+var LEGACY_SPEC_KEYS = ['fabric', 'pieces', 'color', 'made', 'care'];
 
 /* storage_key is deliberately absent: the storefront has no use for it and it
    cannot leak a field it never fetched. An image with no public_url is dropped
@@ -129,7 +151,19 @@ function readProductRows() {
   var withOptional = PRODUCT_COLUMNS.concat(OPTIONAL_PRODUCT_COLUMNS);
   return supabaseSelect(productQuery(withOptional)).catch(function (err) {
     var message = String((err && err.message) || '');
-    var missing = OPTIONAL_PRODUCT_COLUMNS.some(function (c) { return message.indexOf(c) !== -1; });
+    /* Either the column is named in the error, or Postgres says the thing does
+       not exist. Depending on the column name alone is depending on a message
+       we do not own, and the cost of getting it wrong is now the whole
+       catalogue rather than one missing line: an environment where the garment
+       migration has not run must still serve every product it has. */
+    var missing = OPTIONAL_PRODUCT_COLUMNS.some(function (c) { return message.indexOf(c) !== -1; })
+      || message.indexOf('42703') !== -1
+      || message.indexOf('42P01') !== -1
+      || message.indexOf('does not exist') !== -1
+      /* PostgREST's usual wording for a column it cannot see yet is "Could not
+         find the 'x' column of 'products' in the schema cache" — the phrasing
+         a stale environment is most likely to produce. */
+      || message.indexOf('schema cache') !== -1;
     if (!missing) throw err;
     /* The app has not shipped the column yet. Fall back once, quietly. */
     return supabaseSelect(productQuery(PRODUCT_COLUMNS));
@@ -343,6 +377,73 @@ function publicImage(img, fallbackAlt) {
   return out;
 }
 
+/* ---------------------------------------------------------------------------
+ * Garment specification.
+ *
+ * The app owns what is public. A descriptor it marked hidden, or left blank,
+ * never reaches the browser at all — not as an empty row, not as a `show:false`
+ * flag for the storefront to honour. What arrives is already the list to print,
+ * in the order to print it, under the words to print it under.
+ * ------------------------------------------------------------------------- */
+
+function isPlainObject(v) {
+  return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+
+/* The printable values of one descriptor, or [] if it has none to give.
+   Case-insensitive dedupe keeps the first spelling: the app's own casing is the
+   reviewed one, and "Ivory"/"ivory" on the same garment is a data slip, not two
+   colours. */
+function specValues(descriptor) {
+  if (!isPlainObject(descriptor)) return [];
+  /* Absent means visible. Only an explicit false hides a descriptor, so a row
+     the app has not expressed an opinion about still reaches the page. */
+  if (descriptor.show === false) return [];
+  if (!Array.isArray(descriptor.values)) return [];
+
+  var seen = {};
+  return descriptor.values
+    .map(function (v) { return v == null ? '' : String(v).trim(); })
+    .filter(function (v) {
+      if (!v) return false;
+      var k = v.toLowerCase();
+      if (seen[k]) return false;
+      seen[k] = true;
+      return true;
+    });
+}
+
+/* True when the stored object is something we can actually read descriptors
+   out of. An absent, null, empty or wrongly-shaped value is not a garment with
+   nothing to say — it is a row the migration has not reached, and the scalar
+   mirrors are still the better source for it. */
+function hasCanonicalSpecs(details) {
+  if (!isPlainObject(details)) return false;
+  return SPEC_ROWS.some(function (r) { return isPlainObject(details[r[0]]); });
+}
+
+/* The five scalar mirrors the app still writes for the transition. Deliberately
+   not split on ", ": the mirror joins multiple values that way, but "Lahore, by
+   hand" is one value containing the same separator, and splitting it would turn
+   one true statement into two false ones. A legacy row prints as it is stored. */
+function legacySpecs(row) {
+  return LEGACY_SPEC_KEYS.map(function (key) {
+    var label = SPEC_ROWS.filter(function (r) { return r[0] === key; })[0][1];
+    var value = row[key] == null ? '' : String(row[key]).trim();
+    return value ? { key: key, label: label, values: [value] } : null;
+  }).filter(Boolean);
+}
+
+function publicGarmentSpecs(row) {
+  var details = row.garment_details;
+  if (!hasCanonicalSpecs(details)) return legacySpecs(row);
+
+  return SPEC_ROWS.map(function (r) {
+    var values = specValues(details[r[0]]);
+    return values.length ? { key: r[0], label: r[1], values: values } : null;
+  }).filter(Boolean);
+}
+
 function publicProduct(row) {
   if (!row || !row.id) return null;
 
@@ -368,6 +469,15 @@ function publicProduct(row) {
        availability. */
     fulfillment_note: blank(row.fulfillment_note) ? null : String(row.fulfillment_note).trim(),
 
+    /* The garment specification the page prints, already filtered, ordered and
+       labelled. See publicGarmentSpecs above. */
+    garment_specs: publicGarmentSpecs(row),
+
+    /* The shape the storefront read before garment_specs existed, from the
+       scalar mirrors the app still writes. Kept only so a browser holding a
+       cached script during a deploy is not left with a blank specification;
+       nothing new should be built on it, and it goes when the app retires the
+       mirrors. */
     garment_details: {
       fabric: row.fabric || null,
       pieces: row.pieces || null,
