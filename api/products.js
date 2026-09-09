@@ -52,8 +52,15 @@ var OPTIONAL_PRODUCT_COLUMNS = ['fulfillment_note'];
    rather than rendered as a broken URL. */
 var IMAGE_COLUMNS = [
   'id', 'product_id', 'public_url', 'image_role', 'sort_order',
-  'is_primary', 'show_on_website', 'alt_text', 'width', 'height', 'variants'
+  'is_primary', 'show_on_website', 'alt_text', 'width', 'height', 'variants',
+  /* Read only to break ties in sort_order, never projected. */
+  'created_at'
 ].join(',');
+
+/* Photographs customers sent in, kept apart from the studio work. The app will
+   not let one be a product's hero, and the storefront never mixes them into the
+   gallery — they are evidence of a piece being worn, not another view of it. */
+var CUSTOMER_ROLE = 'customer_photo';
 
 /* Collection membership, normalised app-side in migration 028. Two switches
    decide whether a membership is public: the collection's own, and this
@@ -141,7 +148,9 @@ function readPublishedProducts() {
       + '?select=' + encodeURIComponent(IMAGE_COLUMNS)
       + '&product_id=in.(' + ids + ')'
       + '&show_on_website=is.true'
-      + '&order=sort_order.asc';
+      /* created_at settles a tie so the order is the same on every request
+         rather than whatever the database happened to return. */
+      + '&order=' + encodeURIComponent('sort_order.asc,created_at.asc');
 
     /* Both follow-ups go out together: neither depends on the other, so the
        endpoint still costs one round trip's worth of waiting. */
@@ -368,8 +377,23 @@ function publicProduct(row) {
     },
 
     /* Gallery order is sort_order, exactly as stored. Hero is a separate
-       concept the storefront resolves itself. */
+       concept the storefront resolves itself.
+
+       Customer photographs are deliberately absent from this array. Kept in it
+       they would be eligible to become the hero, to appear as a thumbnail, and
+       to turn up mid-way through the studio lightbox — three different ways for
+       a snapshot to be mistaken for the shot Saima commissioned. */
     images: (row.images || [])
+      .filter(function (img) { return img && img.image_role !== CUSTOMER_ROLE; })
+      .map(function (img) { return publicImage(img, name); })
+      .filter(Boolean),
+
+    /* The same shape as `images`, so every existing image helper works on them
+       unchanged. Already filtered to show_on_website by the query, and already
+       in sort_order — the parent product's own publication rules got them this
+       far. */
+    customer_photos: (row.images || [])
+      .filter(function (img) { return img && img.image_role === CUSTOMER_ROLE; })
       .map(function (img) { return publicImage(img, name); })
       .filter(Boolean),
 

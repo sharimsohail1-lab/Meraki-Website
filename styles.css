@@ -482,3 +482,28 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
    show. The block keeps its footprint on the site's own ground, so nothing
    moves when the answer arrives — the caption simply appears with it. */
 .hero-film[data-hero="unresolved"] .film-tag{visibility:hidden}
+
+/* Photographs customers sent in. Quiet on purpose: the same micro-caps label
+   the rest of the page uses, no card, no border, no badge — the photographs
+   carry the trust, and dressing them up as a review widget would undercut the
+   very thing that makes them believable. */
+.seen{margin:clamp(44px,6vw,78px) 0 0;padding-top:clamp(30px,4vw,48px);
+  border-top:1px solid rgba(42,31,34,.09)}
+.seen .eyebrow{margin:0 0 clamp(18px,2.4vw,26px)}
+.seen-grid{display:grid;gap:clamp(10px,1.6vw,18px);
+  grid-template-columns:repeat(auto-fill,minmax(min(190px,44%),1fr))}
+/* A button, because it opens something — but nothing about it should look like
+   one. The photograph is the whole control. */
+.seen-shot{padding:0;border:0;background:var(--stone);cursor:pointer;
+  position:relative;overflow:hidden;aspect-ratio:3/4;display:block}
+.seen-shot img{width:100%;height:100%;object-fit:cover;display:block;
+  transition:transform .5s ease}
+.seen-shot:hover img{transform:scale(1.03)}
+.seen-shot:focus-visible{outline:2px solid var(--plum);outline-offset:3px}
+/* One photograph alone should read as a portrait, not as a banner stretched
+   across the page. */
+.seen-grid:has(.seen-shot:only-child){grid-template-columns:minmax(0,clamp(220px,32vw,300px))}
+@media(max-width:640px){
+  .seen-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .seen-grid:has(.seen-shot:only-child){grid-template-columns:minmax(0,68%)}
+}

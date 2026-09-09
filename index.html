@@ -278,6 +278,17 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
       <div class="specs" id="pdp-specs"></div>
     </div>
   </div>
+  <!-- Photographs customers sent in. Written by renderCustomerPhotos(); the
+       whole section stays out of the document until there is something real to
+       put in it, so a piece nobody has sent a photograph of looks exactly as it
+       always did. Placed after the piece's own details and before the related
+       pieces: it belongs to the decision being made, not to the browsing that
+       follows it. -->
+  <section class="seen hidden" id="pdp-seen" aria-labelledby="pdp-seen-title">
+    <p class="eyebrow" id="pdp-seen-title">Seen on Our Customers</p>
+    <div class="seen-grid" id="pdp-seen-grid"></div>
+  </section>
+
   <div class="also">
     <p>You may also like</p>
     <div class="grid small" id="pdp-related"></div>
