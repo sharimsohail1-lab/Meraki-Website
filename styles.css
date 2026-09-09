@@ -39,8 +39,20 @@ header{position:sticky;top:0;z-index:60;background:rgba(251,248,244,.9);
    stays 0 — letting this size to content moved the logo even with no edits at
    all. The gap is a little tighter than it was to buy room for edit links, and
    min-width:0 with nowrap content would spill over the wordmark, so the row
-   clips as a last resort instead. */
-.hdr nav{flex:1 1 0;display:flex;gap:18px;align-items:center;min-width:0;overflow:hidden}
+   clips as a last resort instead.
+
+   Sideways only. This row is a few pixels taller than its text, and the
+   Collections panel hangs well below it — plain overflow:hidden clipped the
+   panel out of existence, so the menu opened in every respect except being on
+   the screen. overflow-x:clip is what makes one-axis clipping possible at all:
+   with hidden, a single clipped axis forces the other to auto, and visible
+   stops being visible. The clip margin covers the panel's 18px left inset; it
+   is the same 20px as the header's own gap, so a sideways spill can reach the
+   wordmark at most and never over it. Where clip is not understood both
+   declarations drop and the row simply does not clip — the menu working
+   matters more than a rare overlap. */
+.hdr nav{flex:1 1 0;display:flex;gap:18px;align-items:center;min-width:0;
+  overflow-x:clip;overflow-y:visible;overflow-clip-margin:20px}
 .hdr .brand{flex:0 0 auto}
 .hdr .brand img{height:clamp(38px,5.2vw,52px);width:auto;mix-blend-mode:multiply}
 /* The wordmark reads too small against the navigation on a wide screen. Desktop
