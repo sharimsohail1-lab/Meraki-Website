@@ -477,3 +477,8 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
   .mobnav .navlink.navlink-edit{display:inline-block;max-width:16ch;
     padding:11px 0 12px;margin:-11px 0 -12px;line-height:15px}
 }
+
+/* Before the homepage config has answered, neither hero is the right one to
+   show. The block keeps its footprint on the site's own ground, so nothing
+   moves when the answer arrives — the caption simply appears with it. */
+.hero-film[data-hero="unresolved"] .film-tag{visibility:hidden}

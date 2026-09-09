@@ -608,6 +608,11 @@ function renderCollectionNav() {
  */
 var HOMEPAGE = null;
 var CURATED_EDITS = [];
+/* 'loading' until /api/site-settings has answered one way or the other. HOMEPAGE
+   is null both before the answer and when the answer is "nothing configured",
+   so it cannot be used to tell those two apart — and the difference decides
+   whether several megabytes of film are worth fetching. */
+var homepageState = 'loading';
 
 function homepageBlock(name) {
   return HOMEPAGE && HOMEPAGE[name] ? HOMEPAGE[name] : null;
@@ -754,12 +759,44 @@ function renderHomeSections() {
   if (arrivalsCfg) byId('arrivals-title').textContent = arrivalsCfg.heading || 'New Arrivals';
 }
 
+/* The default hero's film, brought to life.
+ *
+ * Its address sits in data-src until here, because a <source> in the markup is
+ * fetched by the browser's preload scanner during parsing — before any script
+ * runs. On a visit where a campaign is live that would download a film nobody
+ * sees. This is the moment the site knows the default hero is the one being
+ * shown, so this is the moment the film gets a source.
+ *
+ * Runs once. Calling it again on a later render must not restart the download
+ * or interrupt playback. */
+function activateDefaultHero() {
+  var video = byId('hero-video');
+  if (!video || video.dataset.activated) return;
+  var url = video.dataset.src;
+  if (!url) return;
+
+  video.dataset.activated = '1';
+  if (video.dataset.poster) video.setAttribute('poster', video.dataset.poster);
+  video.setAttribute('preload', 'auto');
+  video.setAttribute('autoplay', '');
+
+  var source = document.createElement('source');
+  source.setAttribute('type', 'video/mp4');
+  source.setAttribute('src', url);
+  video.insertBefore(source, video.firstChild);
+  /* Without this the element keeps the empty network state it was parsed with
+     and never looks at the source just added. */
+  video.load();
+  setupHeroFilm();
+}
+
 /* The campaign hero. Rendered only when the app has actually said something —
    otherwise the film and copy already in the markup are left entirely alone,
    which is what keeps migration 029 from changing the site by existing. */
 var HERO_BTNROW = null;
 
 function renderCampaign() {
+  var hero = $('.hero-film');
   var row0 = $('.hero-copy .btnrow');
   /* Captured before anything can overwrite it, the same way the editorial hero
      photograph is: without this the swap is one-way, and a settings outage
@@ -767,14 +804,29 @@ function renderCampaign() {
   if (HERO_BTNROW === null && row0) HERO_BTNROW = row0.innerHTML;
 
   var c = homepageBlock('campaign');
+
+  /* Nothing is decided yet. Show neither hero rather than the wrong one: the
+     ground stays bare, the caption is held back, and no film is fetched. The
+     block keeps its size, so nothing moves when the answer arrives. */
+  if (homepageState === 'loading') {
+    if (hero) hero.setAttribute('data-hero', 'unresolved');
+    return;
+  }
+
   document.body.setAttribute('data-theme', (c && c.theme) || 'default');
+
   if (!c) {
+    /* Settled: this hero is the one. Now the film is worth its bytes. */
+    if (hero) hero.setAttribute('data-hero', 'default');
+    activateDefaultHero();
     if (row0 && HERO_BTNROW !== null) {
       row0.innerHTML = HERO_BTNROW;
       row0.classList.remove('hidden');
     }
     return;
   }
+
+  if (hero) hero.setAttribute('data-hero', 'campaign');
 
   if (!blank(c.heading)) byId('hero-heading').innerHTML = esc(c.heading);
   var lede = $('.hero-copy .lede');
@@ -1794,12 +1846,16 @@ function loadSettings() {
       HOMEPAGE = (payload && payload.homepage) || null;
       CURATED_EDITS = (payload && Array.isArray(payload.curated_edits))
         ? payload.curated_edits : [];
+      homepageState = 'ready';
     })
     .catch(function (err) {
       SETTINGS = blankSettings();
-      /* An outage must not rearrange the homepage either. */
+      /* An outage must not rearrange the homepage either — and the default
+         hero is the established answer when the question cannot be asked, so
+         the film loads now rather than never. */
       HOMEPAGE = null;
       CURATED_EDITS = [];
+      homepageState = 'error';
       if (window.console && console.warn) console.warn('Site settings unavailable:', err);
     })
     .then(function () {
@@ -1991,7 +2047,6 @@ function setupCollectionMenus() {
   window.addEventListener('hashchange', closeAll);
 }
 
-setupHeroFilm();
 setupCollectionMenus();
 
 /* Crossing the breakpoint moves the campaign button between the copy column and
