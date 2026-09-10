@@ -245,6 +245,7 @@ function mapProduct(raw) {
     description: raw.description || '',
     price: formatPrice(raw.price, raw.currency),
     priceValue: raw.price,
+    currency: raw.currency || 'USD',
     collections: raw.collection_names || [],
     availability: raw.availability || 'made_to_order',
     availabilityLabel: avail.label,
@@ -1573,13 +1574,189 @@ byId('lb-stage').addEventListener('touchend', function (e) {
 }, { passive: true });
 
 /* ---------- routing ---------- */
-var VIEWS = ['home', 'collection', 'product', 'inquiry'];
+/* ---------------------------------------------------------------------------
+ * Consent, and the Meta Pixel that depends on it.
+ *
+ * The pixel used to sit in <head> and fire while the page parsed, which set
+ * _fbp before the visitor had been asked anything. Nothing Meta-related now
+ * happens until someone has said yes: no script tag, no init, no event.
+ *
+ * The whole thing is one small module on purpose. Analytics that is scattered
+ * is analytics nobody can audit, and this is the part of the site a visitor is
+ * most entitled to have an accurate answer about.
+ * ------------------------------------------------------------------------- */
+
+var CONSENT_KEY = 'meraki.consent.v1';
+var META_PIXEL_ID = '1110330678318896';
+
+/* 'accepted' | 'declined' | null for not yet asked. Anything else in storage —
+   an older value, something hand-edited — reads as unanswered, which errs
+   towards asking again rather than towards tracking. */
+function readConsent() {
+  try {
+    var v = localStorage.getItem(CONSENT_KEY);
+    return v === 'accepted' || v === 'declined' ? v : null;
+  } catch (e) { return null; }   /* private mode: treat as unanswered */
+}
+
+var consent = readConsent();
+
+function saveConsent(value) {
+  consent = value;
+  try { localStorage.setItem(CONSENT_KEY, value); } catch (e) { /* private mode */ }
+}
+
+/* Loaded once per page life. Meta's own snippet is idempotent, but init is not,
+   so the flag guards the init as much as the script tag. */
+var pixelReady = false;
+
+function initMetaPixel() {
+  if (pixelReady || consent !== 'accepted') return false;
+  try {
+    /* Meta's loader, unchanged in what it does — only in when it runs. */
+    /* eslint-disable */
+    !function (f, b, e, v, n, t, s) {
+      if (f.fbq) return; n = f.fbq = function () {
+        n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
+      };
+      if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0';
+      n.queue = []; t = b.createElement(e); t.async = !0;
+      t.src = v; s = b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t, s);
+    }(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+    /* eslint-enable */
+    if (typeof window.fbq !== 'function') return false;
+    window.fbq('init', META_PIXEL_ID);
+    pixelReady = true;
+  } catch (e) {
+    /* A blocked script, an ad blocker, a CSP — none of it is the page's
+       problem. The site does not depend on Meta for anything. */
+    pixelReady = false;
+  }
+  return pixelReady;
+}
+
+/* Every Meta event on the site goes through here. Returns whether it actually
+   went, which is what the dedupe keys are set from — an event that never left
+   should not be remembered as sent. */
+function trackMetaEvent(name, params) {
+  if (consent !== 'accepted' || !pixelReady) return false;
+  try {
+    if (typeof window.fbq !== 'function') return false;
+    if (params) window.fbq('track', name, params);
+    else window.fbq('track', name);
+    return true;
+  } catch (e) { return false; }
+}
+
+/* The route as Meta should see it. The same hash the router already trusts —
+   there is no second interpretation of where the visitor is. */
+function routeKey() {
+  return location.hash.replace(/^#\/?/, '') || 'home';
+}
+
+/* What has already been reported for the navigation the visitor is on.
+   route() runs more than once per URL by design — the catalogue landing calls
+   it, an error calls it, a sent inquiry calls it — so these are keyed on the
+   route rather than counted per call. Cleared by moving somewhere else, which
+   is why leaving a piece and coming back reports it again: that is a second
+   visit to it, not a re-render of the first. */
+var lastPageViewKey = null;
+var lastViewContentKey = null;
+
+function reportViewContent(key) {
+  if (key.indexOf('product/') !== 0) { lastViewContentKey = null; return; }
+  if (lastViewContentKey === key) return;
+
+  /* The catalogue may not have answered yet on a direct load. Reporting a
+     piece we cannot name would be worse than reporting it a moment later, and
+     the key stays unset so the next route() through here still sends it. */
+  var p = findProductBySlug(state.slug);
+  if (!p) return;
+
+  var params = {
+    content_type: 'product',
+    content_name: p.name,
+    /* The app's own reference where there is one, its id otherwise. Never
+       invented, and never the slug. */
+    content_ids: [p.sku || p.id]
+  };
+  if (typeof p.priceValue === 'number') {
+    params.value = p.priceValue;
+    params.currency = p.currency || 'USD';
+  }
+  if (trackMetaEvent('ViewContent', params)) lastViewContentKey = key;
+}
+
+/* One PageView per real navigation, plus ViewContent when that navigation is a
+   piece. Nothing here fires for a lightbox, a modal, a resize or a re-render,
+   because none of those change the hash. */
+function reportRouteView() {
+  if (consent !== 'accepted') return;
+  if (!pixelReady && !initMetaPixel()) return;
+
+  var key = routeKey();
+  if (lastPageViewKey !== key && trackMetaEvent('PageView')) lastPageViewKey = key;
+  reportViewContent(key);
+}
+
+/* ---------- the consent UI ---------- */
+
+function showConsentBanner(show) {
+  var el = byId('consent');
+  if (!el) return;
+  el.classList.toggle('hidden', !show);
+}
+
+function answerConsent(value) {
+  saveConsent(value);
+  showConsentBanner(false);
+  if (value === 'accepted') {
+    /* Accepting on a product page owes them both events for where they already
+       are, without making them navigate again to be counted. */
+    initMetaPixel();
+    reportRouteView();
+  }
+  /* Declining sends nothing and unsends nothing. Whatever a previous accept
+     already dispatched has left; from here trackMetaEvent simply refuses. */
+}
+
+(function setupConsent() {
+  var accept = byId('consent-accept');
+  var decline = byId('consent-decline');
+  var prefs = byId('cookie-prefs');
+  if (accept) accept.addEventListener('click', function () { answerConsent('accepted'); });
+  if (decline) decline.addEventListener('click', function () { answerConsent('declined'); });
+  if (prefs) {
+    prefs.addEventListener('click', function () {
+      showConsentBanner(true);
+      /* Asked for it, so put them in it — the first choice takes focus. */
+      var first = byId('consent-decline');
+      if (first) first.focus();
+    });
+  }
+  /* Reading the banner should not require answering it first. */
+  var link = byId('consent-privacy');
+  if (link) link.addEventListener('click', function () { showConsentBanner(false); });
+
+  if (consent === null) showConsentBanner(true);
+  else if (consent === 'accepted') initMetaPixel();
+})();
+
+var VIEWS = ['home', 'collection', 'product', 'inquiry', 'privacy'];
 
 function show(view) {
   VIEWS.forEach(function (v) { byId('view-' + v).classList.toggle('hidden', v !== view); });
 }
 
+/* The router proper is applyRoute; route() is what everything calls, so that
+   every path into a new view reports it exactly once. */
 function route() {
+  applyRoute();
+  reportRouteView();
+}
+
+function applyRoute() {
   var hash = location.hash.replace(/^#\/?/, '');
 
   /* Leaving the inquiry page retires the thank-you screen, so the next visit
@@ -1613,6 +1790,10 @@ function route() {
     state.edit = null;
     state.filter = hash === 'ready' ? 'ready' : (hash === 'made-to-order' ? 'mto' : 'all');
     renderGrids(); show('collection'); window.scrollTo(0, 0); return;
+  }
+  /* Reachable whatever the visitor decided, and whether or not they decided. */
+  if (hash === 'privacy') {
+    show('privacy'); window.scrollTo(0, 0); return;
   }
   if (hash === 'inquiry') {
     byId('inq-form-wrap').classList.toggle('hidden', state.sent);
@@ -1703,9 +1884,11 @@ var leadReported = null;
 function reportLead(id) {
   if (!id || leadReported === id) return;
   leadReported = id;
-  try {
-    if (typeof window.fbq === 'function') window.fbq('track', 'Lead');
-  } catch (e) {}
+  /* Consent is checked inside trackMetaEvent, so a declining customer's
+     inquiry still completes in exactly the same way — it is simply not
+     reported. The id is marked used either way: whether Meta heard about this
+     inquiry is not a reason to consider reporting it again. */
+  trackMetaEvent('Lead');
 }
 
 /* The bag is cleared and the thank-you shown only after the server has

@@ -25,27 +25,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 
-<!-- Meta Pixel Code -->
-<script>
-!function(f,b,e,v,n,t,s)
-{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-n.queue=[];t=b.createElement(e);t.async=!0;
-t.src=v;s=b.getElementsByTagName(e)[0];
-s.parentNode.insertBefore(t,s)}(window, document,'script',
-'https://connect.facebook.net/en_US/fbevents.js');
-fbq('init', '1110330678318896');
-fbq('track', 'PageView');
-</script>
-<!-- End Meta Pixel Code -->
+<!-- The Meta Pixel is not here any more. It used to load and fire PageView
+     while the page parsed, which set _fbp before the visitor had been asked
+     anything. It is now loaded by initMetaPixel() in script.js, and only after
+     someone has accepted. The noscript beacon went with it: a bare <img> to
+     facebook.com/tr cannot be made conditional, so it was a tracking request
+     nobody could refuse. -->
 </head>
 <body>
-<!-- Meta Pixel Code -->
-<noscript><img height="1" width="1" style="display:none"
-src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
-/></noscript>
-<!-- End Meta Pixel Code -->
 
 <header>
   <div class="hdr">
@@ -424,6 +411,94 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
   </div>
 </div>
 
+<!-- Reachable without accepting anything: it is the page that explains what
+     accepting would mean. Written against the fields the inquiry form actually
+     has, and it claims nothing the code cannot back up. -->
+<div class="view hidden pagepad legal" id="view-privacy">
+  <h1 class="page">Privacy &amp; Cookies</h1>
+  <p class="legal-date">Last updated 10 September 2026</p>
+
+  <p class="legal-lede">Meraki by Saima is a small womenswear label. This page explains, in plain
+    terms, what this website collects, why, and what you can turn off.</p>
+
+  <h2>What you send us</h2>
+  <p>The only information you actively give this website is what you type into an inquiry. That is:</p>
+  <ul>
+    <li>your name</li>
+    <li>your phone number</li>
+    <li>your email address</li>
+    <li>the U.S. state you are in</li>
+    <li>a preferred size, if you choose one</li>
+    <li>anything you write in the message box</li>
+    <li>which pieces you added to your inquiry</li>
+  </ul>
+  <p>We ask for these because an inquiry is the start of a conversation — Saima replies to you
+    directly to talk through sizing, fabric, price and timing. There is no checkout on this site
+    and no payment is taken here, so we never see card details.</p>
+
+  <h2>What the site stores in your browser</h2>
+  <p>Your inquiry list is kept in your own browser's local storage so it survives a refresh. So is
+    a short identifier for an inquiry you are part-way through sending, which stops the same
+    inquiry arriving twice if your connection drops, and your answer to the cookie question below.
+    None of these are advertising cookies and none of them leave your device on their own.</p>
+
+  <h2>Analytics and advertising cookies</h2>
+  <p>If you accept, this site loads the <strong>Meta Pixel</strong>. It tells Meta (Facebook and
+    Instagram) that a browser visited a page, viewed a particular piece, or sent an inquiry, and it
+    sets its own cookies to recognise that browser again. Meta uses this to measure our advertising
+    and to show our pieces to people likely to be interested.</p>
+  <p>We send Meta the page you are on, and for a product page the piece's name, its reference and
+    its price. <strong>We do not send Meta your name, phone number, email address, your message, or
+    anything else from an inquiry.</strong> When an inquiry is sent successfully we tell Meta that
+    one happened, and nothing about who sent it or what it contained.</p>
+  <p>If you decline, the Meta Pixel is never loaded and no Meta cookies are set. The site works the
+    same either way.</p>
+
+  <h2>Changing your mind</h2>
+  <p>Your choice is remembered in your browser until you change it. Use <strong>Cookie
+    preferences</strong> at the bottom of any page to switch. If you decline after previously
+    accepting, we stop sending Meta anything from that moment — but we cannot undo information
+    already sent, or remove cookies Meta has already set on your device. To clear those, use your
+    browser's own settings for deleting cookies and site data.</p>
+
+  <h2>Who else handles this information</h2>
+  <p>We use a small number of services to run the site, and your information passes through them:</p>
+  <ul>
+    <li><strong>Vercel</strong> hosts the website and serves its pages.</li>
+    <li><strong>Supabase</strong> stores inquiries in our database.</li>
+    <li><strong>Meta</strong> receives site-activity information, but only if you accept.</li>
+  </ul>
+  <p>These providers keep their own server logs, which typically include IP addresses, as a normal
+    part of running a website. We do not sell your information, and we do not share it with anyone
+    else for their own marketing.</p>
+
+  <h2>How long we keep inquiries</h2>
+  <p>Inquiries are kept for as long as we need them to answer you and to keep a record of orders
+    and commissions. We have not set a fixed deletion schedule, and we would rather say so than
+    promise one we do not run. If you would like your inquiry removed, ask us and we will delete it.</p>
+
+  <h2>Your choices</h2>
+  <ul>
+    <li>Decline analytics and advertising cookies, at any time, using Cookie preferences.</li>
+    <li>Ask us for a copy of what we hold about you, or ask us to correct or delete it.</li>
+    <li>Clear this site's stored data using your browser's settings, which also clears your
+      inquiry list and your cookie choice.</li>
+  </ul>
+  <p>Depending on where you live you may have additional rights over your information. Ask us and
+    we will do our best to honour them.</p>
+
+  <h2>Children</h2>
+  <p>This site is meant for adults shopping for clothing. We do not knowingly collect information
+    from children.</p>
+
+  <h2>Asking us about privacy</h2>
+  <p id="legal-contact">Write to us with any question about this page or about information we hold,
+    and we will answer.</p>
+
+  <h2>Changes to this page</h2>
+  <p>If we change how any of this works, we will update this page and the date at the top of it.</p>
+</div>
+
 </main>
 
 <footer>
@@ -449,6 +524,9 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
       <p class="line">Made to order<span class="hidden" id="footer-lead-time"></span></p>
       <p class="line hidden" id="footer-size-note"></p>
       <p class="line hidden" id="footer-location"></p>
+      <a href="#/privacy">Privacy &amp; cookies</a>
+      <!-- A button, not a link: it opens a choice rather than going somewhere. -->
+      <button type="button" class="linklike" id="cookie-prefs">Cookie preferences</button>
     </div>
   </div>
   <p class="copyright">© <span id="copyright-year">2026</span> Meraki by Saima</p>
@@ -472,6 +550,23 @@ src="https://www.facebook.com/tr?id=1110330678318896&ev=PageView&noscript=1"
     <span aria-hidden="true">&rsaquo;</span>
   </button>
   <p class="lb-count" id="lb-count" aria-live="polite"></p>
+</div>
+
+<!-- The cookie question. Deliberately not a modal: it does not trap focus, does
+     not cover the page, and browsing works perfectly well while it sits there.
+     Shipped hidden — script.js shows it only when there is no saved answer, or
+     when someone asks for it from the footer. Both choices are plain buttons
+     with the same weight of wording. -->
+<div class="consent hidden" id="consent" role="region" aria-label="Cookie choices">
+  <p class="consent-copy">
+    We use optional analytics and advertising cookies to understand site activity and improve our
+    marketing. You can accept or decline these cookies.
+    <a href="#/privacy" id="consent-privacy">Privacy &amp; cookies</a>
+  </p>
+  <div class="consent-actions">
+    <button type="button" class="consent-btn" id="consent-decline">Decline</button>
+    <button type="button" class="consent-btn consent-yes" id="consent-accept">Accept</button>
+  </div>
 </div>
 
 <script src="script.js"></script>
