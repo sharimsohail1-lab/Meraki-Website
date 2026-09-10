@@ -48,14 +48,13 @@ var PRODUCT_COLUMNS = [
 var OPTIONAL_PRODUCT_COLUMNS = ['fulfillment_note', 'garment_details'];
 
 /* The garment specification, in the order it reads on the page, with the words
-   the customer actually sees. The key is the app's; the label is ours.
-   `color` carries a British label over an American key on purpose — the key is
-   the contract and renaming it would break the app, but nobody shopping a
-   Pakistani womenswear label should be shown "Color". */
+   the customer actually sees. The key is the app's; the label is ours, and the
+   two are changed independently — a label is a wording decision, a key is the
+   contract with the app. */
 var SPEC_ROWS = [
   ['fabric',   'Fabric'],
   ['pieces',   'Pieces'],
-  ['color',    'Colour'],
+  ['color',    'Color'],
   ['made',     'Made'],
   ['care',     'Care'],
   ['occasion', 'Recommended Occasion'],

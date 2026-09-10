@@ -40,7 +40,7 @@ var AVAILABILITY = {
 var GARMENT_ROWS = [
   ['fabric', 'Fabric'],
   ['pieces', 'Pieces'],
-  ['color',  'Colour'],   /* contract key is `color`; customers read "Colour" */
+  ['color',  'Color'],
   ['made',   'Made'],
   ['care',   'Care']
 ];
