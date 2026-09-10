@@ -40,7 +40,7 @@ var AVAILABILITY = {
 var GARMENT_ROWS = [
   ['fabric', 'Fabric'],
   ['pieces', 'Pieces'],
-  ['color',  'Colour'],   /* contract key is `color`; customers read "Colour" */
+  ['color',  'Color'],
   ['made',   'Made'],
   ['care',   'Care']
 ];
@@ -205,7 +205,29 @@ function mapGarmentDetails(details) {
   var g = details || {};
   return GARMENT_ROWS
     .map(function (row) { return [row[1], g[row[0]]]; })
-    .filter(function (row) { return !blank(row[1]); });
+    .filter(function (row) { return !blank(row[1]); })
+    .map(function (row) { return { key: null, label: row[0], values: [String(row[1]).trim()] }; });
+}
+
+/* The garment specification, as the endpoint decided it.
+ *
+ * /api/products already filtered the hidden and the blank, ordered the rows and
+ * named them, so there is nothing left to decide here: what arrives is what
+ * prints. The older `garment_details` shape is read only as a fallback, for the
+ * minutes during a deploy when a browser can be holding this script while a
+ * cached response still predates garment_specs. */
+function mapGarmentSpecs(raw) {
+  if (!Array.isArray(raw.garment_specs)) return mapGarmentDetails(raw.garment_details);
+
+  return raw.garment_specs.map(function (row) {
+    if (!row || blank(row.label) || !Array.isArray(row.values)) return null;
+    var values = row.values
+      .map(function (v) { return blank(v) ? '' : String(v).trim(); })
+      .filter(Boolean);
+    return values.length
+      ? { key: row.key || null, label: String(row.label).trim(), values: values }
+      : null;
+  }).filter(Boolean);
 }
 
 /* The single door product data comes through. Everything downstream renders
@@ -235,7 +257,7 @@ function mapProduct(raw) {
     /* May legitimately be empty: the size selector then hides itself and the
        piece can still be added to an inquiry without one. */
     sizes: sizes,
-    details: mapGarmentDetails(raw.garment_details),
+    specs: mapGarmentSpecs(raw),
     images: mapImages(raw.images, raw.name || ''),
     /* The same mapping as the gallery — same variants, same truthful width
        descriptors, same master fallback — but a separate array, so nothing
@@ -1106,9 +1128,14 @@ function renderProduct() {
   /* Hiding the block when nothing survives also removes its top rule, which
      would otherwise sit under the delivery note as an unexplained hairline. */
   var specsEl = byId('pdp-specs');
-  specsEl.classList.toggle('hidden', p.details.length === 0);
-  specsEl.innerHTML = p.details.map(function (r) {
-    return '<div><p class="k">' + esc(r[0]) + '</p><p class="v">' + esc(r[1]) + '</p></div>';
+  specsEl.classList.toggle('hidden', p.specs.length === 0);
+  /* Several values read as one answer to one question — "Organza, Raw Silk" is
+     what the garment is made of — so they are set as a sentence rather than
+     broken into chips, which would turn a quiet specification into a filter
+     bar. */
+  specsEl.innerHTML = p.specs.map(function (r) {
+    return '<div><p class="k">' + esc(r.label) + '</p>'
+      + '<p class="v">' + esc(r.values.join(', ')) + '</p></div>';
   }).join('');
 
   /* "Select a size" is only an instruction when a size is actually on offer. */
