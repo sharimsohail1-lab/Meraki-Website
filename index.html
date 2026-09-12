@@ -131,6 +131,11 @@
       </video>
       <p class="film-tag"><a class="film-cta" href="#/collection" aria-label="Roselle Collection — view the collection">Roselle Collection</a></p>
     </div>
+    <!-- Dots for a hero of several campaigns. Written by the carousel and left
+         empty otherwise, so a single campaign — or none — carries no control
+         at all, not a hidden one. No arrows here on purpose: the hero moves on
+         its own, and arrowheads over campaign photography read as chrome. -->
+    <div class="hero-dots hidden" id="hero-dots" role="tablist" aria-label="Campaigns"></div>
   </section>
 
   <!-- FEATURED EDIT. The heading, the link label and where that link goes are
@@ -162,21 +167,38 @@
       <h2 class="serif" id="arrivals-title">New Arrivals</h2>
       <a class="textlink" href="#/collection">All pieces</a>
     </div>
-    <div class="grid small" id="arrivals-grid"></div>
+    <!-- A rail rather than a grid: the homepage should offer many pieces
+         without becoming very tall. Arrows here, unlike the hero, because this
+         one does not move until the visitor has reached it and they need a way
+         to drive it themselves. -->
+    <div class="rail" id="arrivals-rail">
+      <div class="rail-track" id="arrivals-track"></div>
+      <button class="rail-arrow rail-prev hidden" id="arrivals-prev" type="button" aria-label="Previous pieces">
+        <span aria-hidden="true">&lsaquo;</span>
+      </button>
+      <button class="rail-arrow rail-next hidden" id="arrivals-next" type="button" aria-label="Next pieces">
+        <span aria-hidden="true">&rsaquo;</span>
+      </button>
+    </div>
   </section>
 
-  <section class="split" id="story">
-    <div class="split-img">
-      <img src="img/p2.webp"
-           srcset="img/sm/p2.webp 560w, img/p2.webp 938w"
-           sizes="(max-width:860px) 100vw, 52vw"
-           alt="Meraki editorial — an ivory crepe jacket with resham bird and vine embroidery"
-           loading="lazy" decoding="async">
+  <!-- SEEN ON OUR CUSTOMERS. Assembled from the customer photographs already
+       carried by each product, so there is no second upload path and no second
+       store — the PDP and this section read the same images. Every photograph
+       is a link to the piece it belongs to: here it is social proof that leads
+       somewhere, not a gallery to open. -->
+  <section class="section hidden" id="home-seen" aria-labelledby="home-seen-title">
+    <div class="sec-head">
+      <h2 class="serif" id="home-seen-title">Seen on Our Customers</h2>
     </div>
-    <div class="split-copy">
-      <p class="eyebrow">Our story</p>
-      <p class="pull">Meraki — to leave a piece of yourself in what you make. Every panel is embroidered by hand, then cut for one woman at a time.</p>
-      <p class="body">Saima works with a small atelier in Lahore. Silks and raw cottons are sourced by the bolt, embroideries are drawn to order, and nothing is produced in volume — which is why some pieces exist only once.</p>
+    <div class="rail" id="seen-rail">
+      <div class="rail-track" id="seen-track"></div>
+      <button class="rail-arrow rail-prev hidden" id="seen-prev" type="button" aria-label="Previous photographs">
+        <span aria-hidden="true">&lsaquo;</span>
+      </button>
+      <button class="rail-arrow rail-next hidden" id="seen-next" type="button" aria-label="Next photographs">
+        <span aria-hidden="true">&rsaquo;</span>
+      </button>
     </div>
   </section>
 
@@ -409,6 +431,28 @@
     <p id="inq-response-note"></p>
     <button class="pill pill-ghost sm" data-nav="#/collection">Continue browsing</button>
   </div>
+</div>
+
+<!-- OUR STORY. It used to be a band on the homepage, which is where the
+     header's "Our Story" link scrolled to. The homepage gave that slot to
+     customer photographs, so rather than lose the copy — or leave the nav
+     pointing at nothing — the same words became a page of their own at the
+     same address. Nothing here is new writing. -->
+<div class="view hidden pagepad" id="view-story">
+  <section class="split story-page" id="story">
+    <div class="split-img">
+      <img src="img/p2.webp"
+           srcset="img/sm/p2.webp 560w, img/p2.webp 938w"
+           sizes="(max-width:860px) 100vw, 52vw"
+           alt="Meraki editorial — an ivory crepe jacket with resham bird and vine embroidery"
+           loading="lazy" decoding="async">
+    </div>
+    <div class="split-copy">
+      <p class="eyebrow">Our story</p>
+      <p class="pull">Meraki — to leave a piece of yourself in what you make. Every panel is embroidered by hand, then cut for one woman at a time.</p>
+      <p class="body">Saima works with a small atelier in Lahore. Silks and raw cottons are sourced by the bolt, embroideries are drawn to order, and nothing is produced in volume — which is why some pieces exist only once.</p>
+    </div>
+  </section>
 </div>
 
 <!-- Reachable without accepting anything: it is the page that explains what
