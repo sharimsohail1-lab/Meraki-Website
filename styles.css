@@ -699,36 +699,46 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
 /* While a photograph is on its way the frame is already its final size, on the
    site's own paper, with the Meraki feather centred in it. Not a white box, not
    a spinner, and never the browser's broken-file icon.
-   
-   The feather is a background image on purpose: if the asset is missing the
-   declaration simply does not paint and the frame stays a quiet cream panel —
-   a graceful floor rather than a broken one. */
-.rail-card .shot,.look .shot{
-  background-color:var(--sand);
+
+   The feather sits on its own layer rather than on the frame itself, so the
+   breath belongs to the mark alone — pulsing the frame would dim the sand with
+   it and make the whole card flicker against the page. If the asset is missing
+   the layer simply does not paint and a quiet cream panel is left, which is a
+   graceful floor rather than a broken one. */
+.rail-card .shot,.look .shot{background-color:var(--sand)}
+.rail-card .shot::before,.look .shot::before{
+  content:'';position:absolute;inset:0;z-index:0;
   background-image:url('img/meraki-feather.webp');
   background-repeat:no-repeat;
-  background-position:50% 48%;
-  /* Small enough to read as a mark rather than a logo dropped on the page. */
-  background-size:28% auto}
-@media(max-width:640px){.rail-card .shot,.look .shot{background-size:34% auto}}
+  background-position:50% 50%;
+  /* Sized to the frame's width, and small enough to read as a mark rather than
+     a logo dropped on the page. The artwork is wide, so a width this modest
+     still reads clearly at a card's height. */
+  background-size:46% auto;
+  opacity:.42}
+@media(max-width:640px){
+  .rail-card .shot::before,.look .shot::before{background-size:58% auto}
+}
+/* Gone the moment the garment is there — including for a frame that failed,
+   where the feather is all there will ever be, so it stops breathing. */
+.rail-card .shot.is-loaded::before,.look .shot.is-loaded::before{display:none}
 
 /* The garment arrives over the feather rather than replacing it in one frame,
    so there is no white flash and nothing moves. */
-.rail-card .shot img,.look .shot img{opacity:0;transition:opacity .45s ease}
+.rail-card .shot img,.look .shot img{position:relative;z-index:1;
+  opacity:0;transition:opacity .45s ease}
 .rail-card .shot.is-loaded img,.look .shot.is-loaded img{opacity:1}
 /* Terminally failed: the image is taken out of the picture entirely so no
    broken-file icon and no alt text can draw over the feather. The card itself
    stays a link. */
 .rail-card .shot.is-failed img,.look .shot.is-failed img{visibility:hidden}
-/* Once a photograph is showing, the feather behind it has done its job. */
-.rail-card .shot.is-loaded,.look .shot.is-loaded{background-image:none}
 
 /* A breath, not an animation. Nothing spins and nothing bounces. */
-@keyframes featherBreathe{0%,100%{opacity:.5}50%{opacity:.8}}
-.rail-card .shot.is-waiting,.look .shot.is-waiting{
-  animation:featherBreathe 2.4s ease-in-out infinite}
+@keyframes featherBreathe{0%,100%{opacity:.3}50%{opacity:.52}}
+.rail-card .shot.is-waiting::before,.look .shot.is-waiting::before{
+  animation:featherBreathe 2.6s ease-in-out infinite}
 @media(prefers-reduced-motion:reduce){
-  .rail-card .shot.is-waiting,.look .shot.is-waiting{animation:none;opacity:.7}
+  .rail-card .shot.is-waiting::before,.look .shot.is-waiting::before{animation:none}
   .rail-card .shot img,.look .shot img{transition:none}
 }
 
