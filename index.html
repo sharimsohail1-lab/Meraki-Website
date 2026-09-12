@@ -131,6 +131,20 @@
       </video>
       <p class="film-tag"><a class="film-cta" href="#/collection" aria-label="Roselle Collection — view the collection">Roselle Collection</a></p>
     </div>
+
+    <!-- THE CAMPAIGN CAROUSEL. Empty and hidden until the app has published a
+         campaign with artwork; the editorial hero above is what shows until
+         then, and is what comes back if every campaign is switched off.
+
+         Written by renderCampaignTrack(). A fixed 16:9 frame holds a track of
+         slides that is translated sideways — the slides are built once and
+         stay, so a change of campaign moves what is already there rather than
+         tearing down the media and building it again. -->
+    <div class="campaign-hero hidden" id="campaign-hero">
+      <div class="campaign-frame">
+        <div class="campaign-track" id="campaign-track"></div>
+      </div>
+    </div>
     <!-- Dots for a hero of several campaigns. Written by the carousel and left
          empty otherwise, so a single campaign — or none — carries no control
          at all, not a hidden one. No arrows here on purpose: the hero moves on

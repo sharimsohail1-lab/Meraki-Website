@@ -1162,7 +1162,7 @@ function captureHeroDefaults() {
  * editorial pace, and none at all for anyone who has asked for reduced motion.
  * ------------------------------------------------------------------------- */
 var HERO_INTERVAL = 5000;
-var hero = { slides: [], index: 0, timer: null, bound: false };
+var hero = { slides: [], index: 0, timer: null, bound: false, artwork: false };
 
 function reducedMotion() {
   return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -1192,6 +1192,128 @@ function heroStartTimer() {
   hero.timer = setInterval(function () { heroGo(hero.index + 1, false); }, HERO_INTERVAL);
 }
 
+/* A campaign whose artwork carries its own identity. Everything the app has
+   baked into the picture — the collection name, the title, the tagline — is in
+   the picture, so the site does not set it again in type beside it. */
+function hasArtwork(c) { return !!(c && c.media_url); }
+
+/* Artwork mode the moment any campaign has a picture. A campaign that has
+   none still gets a slide, but a written one: that is the legacy shape, and it
+   keeps working rather than leaving a hole in the track. */
+function campaignsHaveArtwork(list) { return list.some(hasArtwork); }
+
+/* One slide. The whole thing is a single link, which is what makes the entire
+   artwork the campaign's call to action.
+
+   The visible button is a <span> inside that same link, not a <button> — a
+   control inside a link is invalid nesting and browsers disagree about which
+   one a click belongs to. This way there is one destination, one focus stop,
+   one thing to activate, and the button is purely how it looks.
+
+   The accessible name comes from the campaign's heading, which is why the
+   field stays in the contract even though it is no longer drawn: artwork with
+   words burned into it is unreadable to a screen reader otherwise. */
+function campaignSlideHTML(c, i) {
+  var label = blank(c.heading) ? 'Campaign ' + (i + 1) : c.heading;
+  var href = c.cta ? c.cta.href : '#/collection';
+  var cta = c.cta && !blank(c.cta.label) ? c.cta.label : 'Shop Now';
+
+  var media;
+  if (!hasArtwork(c)) {
+    /* Legacy: no picture, so the words are the campaign. */
+    media = '<span class="campaign-said">'
+      + '<span class="campaign-said-h">' + esc(label) + '</span>'
+      + (blank(c.subheading) ? ''
+        : '<span class="campaign-said-s">' + esc(c.subheading) + '</span>')
+      + '</span>';
+  } else if (c.media_type === 'video') {
+    /* The poster stands in until this slide is the one showing. Mounting every
+       campaign's film would be several downloads for one hero. */
+    media = c.media_poster_url
+      ? '<img src="' + esc(c.media_poster_url) + '" alt="" loading="lazy" decoding="async">'
+      : '';
+  } else {
+    media = '<img src="' + esc(c.media_url) + '" alt="' + esc(label) + '"'
+      + (i === 0 ? ' loading="eager" fetchpriority="high"' : ' loading="lazy"')
+      + ' decoding="async">';
+  }
+
+  return '<a class="campaign-slide" href="' + esc(href) + '"'
+    + ' data-slide="' + i + '"'
+    + ' aria-label="' + esc(label) + '">'
+    + media
+    + '<span class="campaign-go">' + esc(cta) + '</span>'
+    + '</a>';
+}
+
+/* Built once per settings change, not once per slide. This is the whole point
+   of the rewrite: the track and its pictures stay put, and changing campaign
+   moves the track. Nothing is torn down and rebuilt, so nothing can flash. */
+function renderCampaignTrack(list) {
+  var track = byId('campaign-track');
+  if (!track) return;
+  track.innerHTML = list.map(campaignSlideHTML).join('');
+  track.style.width = (list.length * 100) + '%';
+  Array.prototype.forEach.call(track.children, function (slide) {
+    slide.style.width = (100 / list.length) + '%';
+  });
+}
+
+/* Only the campaign on screen is reachable. Without this a keyboard runs
+   through every off-screen campaign's link on the way to the page. */
+function syncSlideFocus() {
+  var track = byId('campaign-track');
+  if (!track) return;
+  Array.prototype.forEach.call(track.children, function (slide, i) {
+    var on = i === hero.index;
+    slide.setAttribute('aria-hidden', on ? 'false' : 'true');
+    slide.setAttribute('tabindex', on ? '0' : '-1');
+  });
+}
+
+/* One campaign ahead. A hero of six is not six downloads. */
+function preloadNextCampaign() {
+  var track = byId('campaign-track');
+  if (!track || hero.slides.length < 2) return;
+  var next = track.children[(hero.index + 1) % hero.slides.length];
+  var img = next && next.querySelector('img');
+  if (img && img.loading === 'lazy') img.loading = 'eager';
+}
+
+/* A campaign's film is mounted only while it is the one showing, and taken
+   down again on the way out — the conservative behaviour the single hero
+   already had, kept. */
+function syncSlideVideo() {
+  var track = byId('campaign-track');
+  if (!track) return;
+  Array.prototype.forEach.call(track.children, function (slide, i) {
+    var c = hero.slides[i];
+    var existing = slide.querySelector('video');
+    if (!c || c.media_type !== 'video' || !hasArtwork(c)) return;
+    if (i === hero.index) {
+      if (existing) return;
+      var poster = slide.querySelector('img');
+      if (poster) poster.style.display = 'none';
+      slide.insertAdjacentHTML('afterbegin',
+        '<video autoplay muted loop playsinline preload="auto"'
+        + ' disablepictureinpicture disableremoteplayback'
+        + (c.media_poster_url ? ' poster="' + esc(c.media_poster_url) + '"' : '')
+        + ' aria-hidden="true">'
+        + '<source src="' + esc(c.media_url) + '" type="video/mp4"></video>');
+    } else if (existing) {
+      existing.parentNode.removeChild(existing);
+      var back = slide.querySelector('img');
+      if (back) back.style.display = '';
+    }
+  });
+}
+
+function slideTo(index) {
+  var track = byId('campaign-track');
+  if (!track || !hero.slides.length) return;
+  track.style.transform = 'translateX(-' + (index * (100 / hero.slides.length)) + '%)';
+}
+
 function renderHeroDots() {
   var dots = byId('hero-dots');
   if (!dots) return;
@@ -1214,7 +1336,18 @@ function heroGo(index, manual) {
   var next = (index + hero.slides.length) % hero.slides.length;
   if (next === hero.index && hero.slides.length > 1 && !manual) return;
   hero.index = next;
-  paintCampaign(hero.slides[next], hero.slides.length > 1);
+
+  if (hero.artwork) {
+    document.body.setAttribute('data-theme', hero.slides[next].theme || 'default');
+    /* The track moves. Nothing is rebuilt, so there is no frame in which the
+       hero is empty. */
+    slideTo(next);
+    syncSlideFocus();
+    syncSlideVideo();
+    preloadNextCampaign();
+  } else {
+    paintCampaign(hero.slides[next], hero.slides.length > 1);
+  }
   renderHeroDots();
   if (manual) heroStartTimer();
 }
@@ -1244,7 +1377,7 @@ function bindHero() {
     });
   }
 
-  var slot = $('.hero-film');
+  var slot = $('.hero');
   if (slot) {
     var x0 = null, y0 = null;
     slot.addEventListener('touchstart', function (e) {
@@ -1290,15 +1423,45 @@ function renderCampaign() {
   hero.slides = list;
   if (hero.index >= list.length) hero.index = 0;
 
+  var camp = byId('campaign-hero');
+  var copy = $('.hero-copy');
+
   if (!list.length) {
     heroStopTimer();
+    hero.artwork = false;
+    if (camp) camp.classList.add('hidden');
+    if (copy) copy.classList.remove('hidden');
+    if (heroSlot) heroSlot.classList.remove('hidden');
     renderHeroDots();
     paintCampaign(null, false);
     return;
   }
 
   bindHero();
-  paintCampaign(list[hero.index], list.length > 1);
+  /* Artwork mode is the new default: the picture is the campaign, so the copy
+     column and the editorial film step aside entirely and the page reaches New
+     Arrivals sooner. A set of campaigns with no artwork at all keeps the old
+     written hero instead of showing an empty frame. */
+  hero.artwork = campaignsHaveArtwork(list);
+
+  if (hero.artwork) {
+    if (copy) copy.classList.add('hidden');
+    if (heroSlot) heroSlot.classList.add('hidden');
+    if (camp) camp.classList.remove('hidden');
+    document.body.setAttribute('data-theme',
+      (list[hero.index] && list[hero.index].theme) || 'default');
+    renderCampaignTrack(list);
+    slideTo(hero.index);
+    syncSlideFocus();
+    syncSlideVideo();
+    preloadNextCampaign();
+  } else {
+    if (camp) camp.classList.add('hidden');
+    if (copy) copy.classList.remove('hidden');
+    if (heroSlot) heroSlot.classList.remove('hidden');
+    paintCampaign(list[hero.index], list.length > 1);
+  }
+
   renderHeroDots();
   heroStartTimer();
 }

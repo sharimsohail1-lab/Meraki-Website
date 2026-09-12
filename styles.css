@@ -745,3 +745,59 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
 /* The customer tile's frame moved inside a span so it can carry the same
    waiting state as a product card. */
 .look .shot{display:block;width:100%;height:100%;position:relative;overflow:hidden}
+
+/* ---------- campaign carousel ---------- */
+
+/* Full width of the hero row, so the copy column's place is taken entirely. */
+.campaign-hero{flex:1 0 100%;min-width:0}
+
+/* The frame is the one fixed thing. Every campaign is drawn as 16:9, so the
+   ratio is declared once here and nothing a campaign does can change the
+   hero's height — no jump between slides, no reflow of the page below. */
+.campaign-frame{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;
+  background:var(--sand)}
+
+/* All the slides, side by side. Width is set inline from the slide count, and
+   moving campaign is a translate of this one element — which is what stops a
+   change of campaign looking like the page reloading. */
+.campaign-track{display:flex;height:100%;
+  transition:transform .85s cubic-bezier(.33,.1,.2,1);will-change:transform}
+@media(prefers-reduced-motion:reduce){.campaign-track{transition:none}}
+
+/* One link per campaign, covering its whole artwork: the picture is the call
+   to action, and the button inside is only how that is advertised. */
+.campaign-slide{position:relative;display:block;height:100%;flex:0 0 auto;
+  color:inherit;overflow:hidden}
+.campaign-slide img,.campaign-slide video{
+  position:absolute;inset:0;width:100%;height:100%;
+  /* The artwork is authored at this ratio, so cover crops nothing in practice
+     and still protects the frame if a campaign arrives slightly off-ratio. */
+  object-fit:cover;object-position:50% 50%}
+.campaign-slide:focus-visible{outline:2px solid var(--plum);outline-offset:-4px}
+
+/* Understated on purpose. A thin rule and a wash of the artwork behind it,
+   not a pill — the campaign photography is what should be doing the talking,
+   and this only has to say that the picture leads somewhere. */
+.campaign-go{position:absolute;left:clamp(14px,3vw,40px);bottom:clamp(14px,3vw,40px);
+  z-index:2;display:inline-block;padding:9px 18px;
+  border:1px solid rgba(255,255,255,.72);
+  background:rgba(28,18,22,.22);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+  color:#fff;font:400 10px/1 var(--sans);letter-spacing:.2em;text-transform:uppercase;
+  transition:background .3s,border-color .3s}
+.campaign-slide:hover .campaign-go{background:rgba(28,18,22,.42);border-color:#fff}
+@media(max-width:640px){
+  .campaign-go{left:12px;bottom:12px;padding:8px 14px;font-size:9.5px;letter-spacing:.16em}
+}
+
+/* A campaign from before artwork carried the words. Its slide is type on the
+   site's own paper rather than an empty frame. */
+.campaign-said{position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;
+  align-items:flex-start;justify-content:center;gap:14px;
+  padding:clamp(24px,6vw,90px);background:var(--sand);color:var(--ink)}
+.campaign-said-h{font:300 clamp(26px,4.4vw,62px)/1.06 var(--serif)}
+.campaign-said-s{max-width:46ch;font:300 clamp(13px,1.5vw,16px)/1.7 var(--sans);color:var(--muted)}
+/* Over type rather than photography, the button takes the page's own ink. */
+.campaign-said~.campaign-go{border-color:rgba(42,31,34,.3);background:transparent;
+  color:var(--ink);backdrop-filter:none;-webkit-backdrop-filter:none}
+.campaign-slide:hover .campaign-said~.campaign-go{background:rgba(42,31,34,.06);
+  border-color:var(--ink);color:var(--ink)}
