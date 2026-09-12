@@ -1162,7 +1162,7 @@ function captureHeroDefaults() {
  * editorial pace, and none at all for anyone who has asked for reduced motion.
  * ------------------------------------------------------------------------- */
 var HERO_INTERVAL = 5000;
-var hero = { slides: [], index: 0, timer: null, bound: false, artwork: false };
+var hero = { slides: [], index: 0, timer: null, bound: false };
 
 function reducedMotion() {
   return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -1197,53 +1197,48 @@ function heroStartTimer() {
    the picture, so the site does not set it again in type beside it. */
 function hasArtwork(c) { return !!(c && c.media_url); }
 
-/* Artwork mode the moment any campaign has a picture. A campaign that has
-   none still gets a slide, but a written one: that is the legacy shape, and it
-   keeps working rather than leaving a hole in the track. */
-function campaignsHaveArtwork(list) { return list.some(hasArtwork); }
+/* Every campaign gets a slide whether or not it has a picture: the words are
+   the campaign's identity again, so one without artwork is simply a slide with
+   nothing in its media column rather than a hole in the track. */
 
-/* One slide. The whole thing is a single link, which is what makes the entire
-   artwork the campaign's call to action.
+/* One slide: the campaign's words beside its picture, which is the hero the
+   site had before artwork was expected to carry its own typography. The
+   difference from then is that every campaign builds one of these and they all
+   stay in the document — moving campaign slides the track rather than
+   repainting this one, which is what used to look like the page reloading.
 
-   The visible button is a <span> inside that same link, not a <button> — a
-   control inside a link is invalid nesting and browsers disagree about which
-   one a click belongs to. This way there is one destination, one focus stop,
-   one thing to activate, and the button is purely how it looks.
-
-   The accessible name comes from the campaign's heading, which is why the
-   field stays in the contract even though it is no longer drawn: artwork with
-   words burned into it is unreadable to a screen reader otherwise. */
+   Two links, never nested: the picture is one, the button is another, and both
+   carry the same destination from the same resolver. A control inside a link is
+   invalid nesting and browsers disagree about which one a click belongs to. */
 function campaignSlideHTML(c, i) {
   var label = blank(c.heading) ? 'Campaign ' + (i + 1) : c.heading;
   var href = c.cta ? c.cta.href : '#/collection';
   var cta = c.cta && !blank(c.cta.label) ? c.cta.label : 'Shop Now';
 
-  var media;
-  if (!hasArtwork(c)) {
-    /* Legacy: no picture, so the words are the campaign. */
-    media = '<span class="campaign-said">'
-      + '<span class="campaign-said-h">' + esc(label) + '</span>'
-      + (blank(c.subheading) ? ''
-        : '<span class="campaign-said-s">' + esc(c.subheading) + '</span>')
-      + '</span>';
-  } else if (c.media_type === 'video') {
-    /* The poster stands in until this slide is the one showing. Mounting every
-       campaign's film would be several downloads for one hero. */
-    media = c.media_poster_url
-      ? '<img src="' + esc(c.media_poster_url) + '" alt="" loading="lazy" decoding="async">'
-      : '';
-  } else {
-    media = '<img src="' + esc(c.media_url) + '" alt="' + esc(label) + '"'
-      + (i === 0 ? ' loading="eager" fetchpriority="high"' : ' loading="lazy"')
-      + ' decoding="async">';
+  var media = '';
+  if (hasArtwork(c)) {
+    media = c.media_type === 'video'
+      /* The poster stands in until this slide is showing; mounting every
+         campaign's film would be several downloads for one hero. */
+      ? (c.media_poster_url
+        ? '<img src="' + esc(c.media_poster_url) + '" alt="" loading="lazy" decoding="async">' : '')
+      : '<img src="' + esc(c.media_url) + '" alt="' + esc(label) + '"'
+        + (i === 0 ? ' loading="eager" fetchpriority="high"' : ' loading="lazy"')
+        + ' decoding="async">';
   }
 
-  return '<a class="campaign-slide" href="' + esc(href) + '"'
-    + ' data-slide="' + i + '"'
-    + ' aria-label="' + esc(label) + '">'
-    + media
-    + '<span class="campaign-go">' + esc(cta) + '</span>'
-    + '</a>';
+  return '<div class="hero-slide" data-slide="' + i + '">'
+    + '<div class="hero-copy">'
+    + '<p class="eyebrow">Pakistani womenswear · made in Lahore</p>'
+    + '<h2 class="display">' + esc(label) + '</h2>'
+    + (blank(c.subheading) ? '' : '<p class="lede">' + esc(c.subheading) + '</p>')
+    + '<a class="pill pill-dark slide-cta" href="' + esc(href) + '">' + esc(cta) + '</a>'
+    + '</div>'
+    + (media
+      ? '<a class="hero-media" href="' + esc(href) + '" aria-label="' + esc(label) + '">'
+        + media + '</a>'
+      : '')
+    + '</div>';
 }
 
 /* Built once per settings change, not once per slide. This is the whole point
@@ -1267,7 +1262,13 @@ function syncSlideFocus() {
   Array.prototype.forEach.call(track.children, function (slide, i) {
     var on = i === hero.index;
     slide.setAttribute('aria-hidden', on ? 'false' : 'true');
-    slide.setAttribute('tabindex', on ? '0' : '-1');
+    /* The links inside an off-screen campaign are taken out of the tab order,
+       so a keyboard does not walk through every campaign on the way down the
+       page. The showing one is reachable exactly as any link is. */
+    Array.prototype.forEach.call(slide.querySelectorAll('a'), function (a) {
+      if (on) a.removeAttribute('tabindex');
+      else a.setAttribute('tabindex', '-1');
+    });
   });
 }
 
@@ -1290,11 +1291,13 @@ function syncSlideVideo() {
     var c = hero.slides[i];
     var existing = slide.querySelector('video');
     if (!c || c.media_type !== 'video' || !hasArtwork(c)) return;
+    var holder = slide.querySelector('.hero-media');
+    if (!holder) return;
     if (i === hero.index) {
       if (existing) return;
       var poster = slide.querySelector('img');
       if (poster) poster.style.display = 'none';
-      slide.insertAdjacentHTML('afterbegin',
+      holder.insertAdjacentHTML('afterbegin',
         '<video autoplay muted loop playsinline preload="auto"'
         + ' disablepictureinpicture disableremoteplayback'
         + (c.media_poster_url ? ' poster="' + esc(c.media_poster_url) + '"' : '')
@@ -1337,17 +1340,13 @@ function heroGo(index, manual) {
   if (next === hero.index && hero.slides.length > 1 && !manual) return;
   hero.index = next;
 
-  if (hero.artwork) {
-    document.body.setAttribute('data-theme', hero.slides[next].theme || 'default');
-    /* The track moves. Nothing is rebuilt, so there is no frame in which the
-       hero is empty. */
-    slideTo(next);
-    syncSlideFocus();
-    syncSlideVideo();
-    preloadNextCampaign();
-  } else {
-    paintCampaign(hero.slides[next], hero.slides.length > 1);
-  }
+  document.body.setAttribute('data-theme', hero.slides[next].theme || 'default');
+  /* The track moves. Nothing is rebuilt, so there is no frame in which the
+     hero is empty. */
+  slideTo(next);
+  syncSlideFocus();
+  syncSlideVideo();
+  preloadNextCampaign();
   renderHeroDots();
   if (manual) heroStartTimer();
 }
@@ -1428,7 +1427,6 @@ function renderCampaign() {
 
   if (!list.length) {
     heroStopTimer();
-    hero.artwork = false;
     if (camp) camp.classList.add('hidden');
     if (copy) copy.classList.remove('hidden');
     if (heroSlot) heroSlot.classList.remove('hidden');
@@ -1438,29 +1436,19 @@ function renderCampaign() {
   }
 
   bindHero();
-  /* Artwork mode is the new default: the picture is the campaign, so the copy
-     column and the editorial film step aside entirely and the page reaches New
-     Arrivals sooner. A set of campaigns with no artwork at all keeps the old
-     written hero instead of showing an empty frame. */
-  hero.artwork = campaignsHaveArtwork(list);
-
-  if (hero.artwork) {
-    if (copy) copy.classList.add('hidden');
-    if (heroSlot) heroSlot.classList.add('hidden');
-    if (camp) camp.classList.remove('hidden');
-    document.body.setAttribute('data-theme',
-      (list[hero.index] && list[hero.index].theme) || 'default');
-    renderCampaignTrack(list);
-    slideTo(hero.index);
-    syncSlideFocus();
-    syncSlideVideo();
-    preloadNextCampaign();
-  } else {
-    if (camp) camp.classList.add('hidden');
-    if (copy) copy.classList.remove('hidden');
-    if (heroSlot) heroSlot.classList.remove('hidden');
-    paintCampaign(list[hero.index], list.length > 1);
-  }
+  /* The copy column and the editorial film belong to the unconfigured
+     homepage. A campaign brings its own words and its own picture, so both
+     step aside while one is running and come back when none is. */
+  if (copy) copy.classList.add('hidden');
+  if (heroSlot) heroSlot.classList.add('hidden');
+  if (camp) camp.classList.remove('hidden');
+  document.body.setAttribute('data-theme',
+    (list[hero.index] && list[hero.index].theme) || 'default');
+  renderCampaignTrack(list);
+  slideTo(hero.index);
+  syncSlideFocus();
+  syncSlideVideo();
+  preloadNextCampaign();
 
   renderHeroDots();
   heroStartTimer();

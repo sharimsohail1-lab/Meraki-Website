@@ -748,56 +748,48 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
 
 /* ---------- campaign carousel ---------- */
 
-/* Full width of the hero row, so the copy column's place is taken entirely. */
+/* Full width of the hero row, so a running campaign takes the whole hero. */
 .campaign-hero{flex:1 0 100%;min-width:0}
-
-/* The frame is the one fixed thing. Every campaign is drawn as 16:9, so the
-   ratio is declared once here and nothing a campaign does can change the
-   hero's height — no jump between slides, no reflow of the page below. */
-.campaign-frame{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;
-  background:var(--sand)}
+.hero-viewport{position:relative;width:100%;overflow:hidden}
 
 /* All the slides, side by side. Width is set inline from the slide count, and
-   moving campaign is a translate of this one element — which is what stops a
+   changing campaign is a translate of this one element — which is what stops a
    change of campaign looking like the page reloading. */
-.campaign-track{display:flex;height:100%;
+.campaign-track{display:flex;align-items:stretch;
   transition:transform .85s cubic-bezier(.33,.1,.2,1);will-change:transform}
 @media(prefers-reduced-motion:reduce){.campaign-track{transition:none}}
 
-/* One link per campaign, covering its whole artwork: the picture is the call
-   to action, and the button inside is only how that is advertised. */
-.campaign-slide{position:relative;display:block;height:100%;flex:0 0 auto;
-  color:inherit;overflow:hidden}
-.campaign-slide img,.campaign-slide video{
+/* One slide laid out exactly as the hero always was: the campaign's words in a
+   column beside its photograph. */
+.hero-slide{flex:0 0 auto;display:flex;flex-wrap:wrap;align-items:stretch;min-width:0}
+.hero-slide .hero-copy{flex:1 1 420px;display:flex;flex-direction:column;
+  justify-content:center;gap:30px;
+  padding:clamp(48px,7vw,110px) clamp(24px,5vw,84px)}
+.hero-slide .display{margin:0;font:300 clamp(40px,6.2vw,84px)/1.04 var(--serif);
+  letter-spacing:-.01em;text-wrap:pretty}
+
+/* The picture keeps a fixed height per breakpoint, so campaigns whose source
+   images differ in shape do not move the page when one follows another. The
+   height is the editorial hero's own — tall enough for a garment, which is
+   what most of these pictures are — and nothing is stretched to reach it. */
+.hero-slide .hero-media{flex:1 1 520px;position:relative;display:block;
+  min-height:clamp(420px,72vh,820px);background:var(--stone);overflow:hidden}
+.hero-slide .hero-media img,.hero-slide .hero-media video{
   position:absolute;inset:0;width:100%;height:100%;
-  /* The artwork is authored at this ratio, so cover crops nothing in practice
-     and still protects the frame if a campaign arrives slightly off-ratio. */
-  object-fit:cover;object-position:50% 50%}
-.campaign-slide:focus-visible{outline:2px solid var(--plum);outline-offset:-4px}
+  /* Fill the frame without distorting. The garment sits high in most of these
+     photographs, which is where the editorial hero already looked. */
+  object-fit:cover;object-position:50% 22%}
+.hero-slide .hero-media:focus-visible{outline:2px solid var(--plum);outline-offset:-4px}
 
-/* Understated on purpose. A thin rule and a wash of the artwork behind it,
-   not a pill — the campaign photography is what should be doing the talking,
-   and this only has to say that the picture leads somewhere. */
-.campaign-go{position:absolute;left:clamp(14px,3vw,40px);bottom:clamp(14px,3vw,40px);
-  z-index:2;display:inline-block;padding:9px 18px;
-  border:1px solid rgba(255,255,255,.72);
-  background:rgba(28,18,22,.22);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
-  color:#fff;font:400 10px/1 var(--sans);letter-spacing:.2em;text-transform:uppercase;
-  transition:background .3s,border-color .3s}
-.campaign-slide:hover .campaign-go{background:rgba(28,18,22,.42);border-color:#fff}
-@media(max-width:640px){
-  .campaign-go{left:12px;bottom:12px;padding:8px 14px;font-size:9.5px;letter-spacing:.16em}
+/* Understated, and the same destination as the picture beside it. */
+.slide-cta{align-self:flex-start;text-decoration:none}
+
+@media(max-width:899px){
+  /* Stacked, with the picture given most of the room — this is a phone, and
+     the photograph is the campaign. Shorter than the desktop frame so New
+     Arrivals still arrives without a long scroll. */
+  .hero-slide .hero-copy{flex:1 1 100%;gap:20px;
+    padding:clamp(30px,7vw,48px) clamp(20px,5vw,32px)}
+  .hero-slide .hero-media{flex:1 1 100%;min-height:clamp(380px,56vh,560px)}
+  .hero-slide .display{font-size:clamp(34px,9vw,52px)}
 }
-
-/* A campaign from before artwork carried the words. Its slide is type on the
-   site's own paper rather than an empty frame. */
-.campaign-said{position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;
-  align-items:flex-start;justify-content:center;gap:14px;
-  padding:clamp(24px,6vw,90px);background:var(--sand);color:var(--ink)}
-.campaign-said-h{font:300 clamp(26px,4.4vw,62px)/1.06 var(--serif)}
-.campaign-said-s{max-width:46ch;font:300 clamp(13px,1.5vw,16px)/1.7 var(--sans);color:var(--muted)}
-/* Over type rather than photography, the button takes the page's own ink. */
-.campaign-said~.campaign-go{border-color:rgba(42,31,34,.3);background:transparent;
-  color:var(--ink);backdrop-filter:none;-webkit-backdrop-filter:none}
-.campaign-slide:hover .campaign-said~.campaign-go{background:rgba(42,31,34,.06);
-  border-color:var(--ink);color:var(--ink)}
