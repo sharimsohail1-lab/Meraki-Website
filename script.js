@@ -787,8 +787,22 @@ function railMove(rail, dir, manual) {
   /* Autoplay wraps so the rail keeps offering something; a manual move stops
      at the end, because someone pressing "next" at the end meant the end. */
   if (!manual && to > over - 2) to = 0;
-  track.scrollTo({ left: Math.max(0, Math.min(to, over)),
-    behavior: reducedMotion() ? 'auto' : 'smooth' });
+  to = Math.max(0, Math.min(to, over));
+
+  /* Automatic movement never slides an unresolved photograph into view. A
+     person asking to move is different: they are told nothing and made to
+     wait for a picture, so a manual move happens at once and the placeholder
+     carries the gap. */
+  if (!manual && !cardsReady(cardsAt(track, to))) {
+    preloadCards(cardsAt(track, to));
+    rail.waiting = true;
+    return;
+  }
+  rail.waiting = false;
+
+  track.scrollTo({ left: to, behavior: reducedMotion() ? 'auto' : 'smooth' });
+  /* One group ahead of wherever this move lands. */
+  preloadCards(cardsAt(track, Math.min(to + page.step, over)));
   if (manual) railDelay(rail);
 }
 
@@ -805,6 +819,9 @@ function railPlay(rail) {
   if (!rail.interval || reducedMotion()) return;
   var track = byId(rail.track);
   if (!track || track.scrollWidth - track.clientWidth <= 4) return;
+  /* Reaching the rail is the moment the next group becomes worth fetching. */
+  preloadCards(cardsAt(track, Math.min(track.scrollLeft + railPage(track).step,
+    track.scrollWidth - track.clientWidth)));
   if (rail.timer) clearInterval(rail.timer);
   rail.timer = setInterval(function () {
     if (document.hidden) return;
@@ -855,36 +872,132 @@ function bindRail(rail) {
 }
 
 var ARRIVALS_RAIL = { track: 'arrivals-track', prev: 'arrivals-prev', next: 'arrivals-next',
-  interval: 2000, timer: null, resume: null, bound: false, io: null };
+  interval: 2000, timer: null, resume: null, bound: false, io: null, waiting: false };
 var SEEN_RAIL = { track: 'seen-track', prev: 'seen-prev', next: 'seen-next',
   /* Deliberately no interval. Customer photographs are looked at, not shown. */
-  interval: 0, timer: null, resume: null, bound: false, io: null };
+  interval: 0, timer: null, resume: null, bound: false, io: null, waiting: false };
 
 /* A compact card for the rails. Same product contract and the same routing as
    the grid card — only the frame is smaller, because a homepage rail should
-   offer many pieces without the page becoming very tall. */
+   offer many pieces without the page becoming very tall.
+
+   `eager` is for the cards that will already be on screen when the rail is
+   reached. Lazy-loading those was the whole reason the rail sat blank for a
+   couple of seconds: the browser waits for layout before it will even begin
+   fetching a lazy image, so the first two cards started late and finished
+   later. Everything past the first group stays lazy — a rail of twenty pieces
+   must not become twenty downloads. */
 var RAIL_SIZES = '(max-width:640px) 44vw, (max-width:1100px) 30vw, 260px';
 
-function railCardHTML(p) {
+/* The most cards that can be on screen at once, across every breakpoint. Used
+   only to decide how many to load eagerly before layout exists to measure. */
+var RAIL_MAX_VISIBLE = 4;
+
+function railCardHTML(p, i) {
+  var eager = i < RAIL_MAX_VISIBLE;
+  var attrs = eager
+    ? 'loading="eager" fetchpriority="high" decoding="async"'
+    : 'loading="lazy" decoding="async"';
   return '<a class="rail-card" href="#/product/' + esc(p.slug) + '">'
-    + '<div class="shot">' + imgHTML(p.images[0], RAIL_SIZES, 'loading="lazy" decoding="async"') + '</div>'
+    + '<div class="shot is-waiting">' + imgHTML(p.images[0], RAIL_SIZES, attrs) + '</div>'
     + '<div class="meta"><p class="name">' + esc(p.name) + '</p>'
     + '<p class="price">' + esc(p.price) + '</p></div></a>';
 }
 
-/* Every customer photograph on the site, each one a way to the piece it shows.
-   Ordering is deliberate and stable: the catalogue's own newest-first order for
-   the pieces, and within a piece the sort_order the app already gave the
-   photographs. Nothing is shuffled and nothing is sampled. */
+/* ---------------------------------------------------------------------------
+ * Image readiness.
+ *
+ * A photograph is "resolved" once the browser has finished with it either way
+ * — loaded, or failed for good. Both are terminal: a picture that will never
+ * arrive must not hold the rail still forever, so an error resolves exactly as
+ * a success does and only the placeholder stays behind.
+ * ------------------------------------------------------------------------- */
+function markResolved(img, ok) {
+  var shot = img.parentNode;
+  if (!shot) return;
+  img.dataset.resolved = '1';
+  shot.classList.remove('is-waiting');
+  /* Loaded: the garment crossfades up over the placeholder. Failed: the image
+     is taken out of the picture entirely rather than left to draw the
+     browser's broken-file icon, and the feather stays where it was. */
+  shot.classList.add(ok ? 'is-loaded' : 'is-failed');
+
+  /* A rail that held still for this photograph should go as soon as it
+     arrives, rather than sitting out the rest of a tick it already missed.
+     railPlay restarts the interval, so the move it was owed does not land on
+     top of the tick that was already due and advance two groups at once. */
+  if (ARRIVALS_RAIL.waiting) {
+    ARRIVALS_RAIL.waiting = false;
+    railMove(ARRIVALS_RAIL, 1, false);
+    railPlay(ARRIVALS_RAIL);
+  }
+}
+
+function watchRailImages(track) {
+  if (!track) return;
+  Array.prototype.forEach.call(track.querySelectorAll('img'), function (img) {
+    if (img.dataset.watched) return;
+    img.dataset.watched = '1';
+    /* Already in the cache: complete before a listener could ever fire. */
+    if (img.complete) {
+      markResolved(img, img.naturalWidth > 0);
+      return;
+    }
+    img.addEventListener('load', function () { markResolved(img, true); });
+    img.addEventListener('error', function () { markResolved(img, false); });
+  });
+}
+
+/* The cards whose photographs would be on screen at a given scroll position. */
+function cardsAt(track, left) {
+  var out = [];
+  var w = track.clientWidth;
+  Array.prototype.forEach.call(track.children, function (card) {
+    var x = card.offsetLeft - track.offsetLeft;
+    if (x + card.offsetWidth > left + 2 && x < left + w - 2) out.push(card);
+  });
+  return out;
+}
+
+function cardsReady(cards) {
+  return cards.every(function (card) {
+    var img = card.querySelector('img');
+    return !img || img.dataset.resolved === '1';
+  });
+}
+
+/* Start fetching a group before it is needed, so the two-second tick usually
+   finds it already there. One group ahead only — never the whole rail. */
+function preloadCards(cards) {
+  cards.forEach(function (card) {
+    var img = card.querySelector('img');
+    if (!img || img.dataset.resolved === '1') return;
+    if (img.loading === 'lazy') img.loading = 'eager';
+  });
+}
+
+
+/* One photograph for each piece someone has sent one in for.
+ *
+ * The homepage is a way into the catalogue, so a piece earns one tile however
+ * many photographs it has — four tiles of the same suit would crowd out three
+ * other pieces. The one chosen is the first in the order the PDP already uses,
+ * which mapImages settled: sort_order ascending, with a primary photograph
+ * hoisted in front. So reordering in the app, or deleting the first, changes
+ * what the homepage shows with nothing here to update.
+ *
+ * PRODUCTS holds only published, unarchived pieces, so eligibility is the
+ * catalogue's own and there is no second rule. The URL check is a secondary
+ * safety net for the same file arriving under two pieces — product-level
+ * selection has already done the real work. */
 function customerLooks() {
   var out = [];
   var seen = {};
   newestFirst(PRODUCTS).forEach(function (p) {
-    (p.customerPhotos || []).forEach(function (img) {
-      if (!img || blank(img.src) || seen[img.src]) return;
-      seen[img.src] = true;
-      out.push({ product: p, img: img });
-    });
+    var first = (p.customerPhotos || [])[0];
+    if (!first || blank(first.src) || seen[first.src]) return;
+    seen[first.src] = true;
+    out.push({ product: p, img: first });
   });
   return out;
 }
@@ -900,13 +1013,17 @@ function renderCustomerLooks() {
   section.classList.toggle('hidden', looks.length === 0);
   if (!looks.length) { track.innerHTML = ''; railStop(SEEN_RAIL); return; }
 
-  track.innerHTML = looks.map(function (l) {
+  track.innerHTML = looks.map(function (l, i) {
+    var eager = i < RAIL_MAX_VISIBLE;
     return '<a class="look" href="#/product/' + esc(l.product.slug) + '"'
       + ' aria-label="' + esc(l.product.name) + ' — seen on a customer">'
-      + imgHTML(l.img, LOOK_SIZES, 'loading="lazy" decoding="async"')
-      + '</a>';
+      + '<span class="shot is-waiting">'
+      + imgHTML(l.img, LOOK_SIZES, eager
+        ? 'loading="eager" decoding="async"' : 'loading="lazy" decoding="async"')
+      + '</span></a>';
   }).join('');
 
+  watchRailImages(track);
   bindRail(SEEN_RAIL);
   railSyncArrows(SEEN_RAIL);
 }
@@ -971,6 +1088,7 @@ function renderHomeSections() {
   if (arrivalsCfg) byId('arrivals-title').textContent = arrivalsCfg.heading || 'New Arrivals';
 
   if (arrivals.length) {
+    watchRailImages(byId('arrivals-track'));
     bindRail(ARRIVALS_RAIL);
     railSyncArrows(ARRIVALS_RAIL);
   } else {

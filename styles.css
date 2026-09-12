@@ -693,3 +693,45 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
 
 /* Our Story, now a page rather than a band, needs its own breathing room. */
 .story-page{margin:clamp(10px,2vw,26px) 0 clamp(40px,6vw,80px)}
+
+/* ---------- the loading frame ---------- */
+
+/* While a photograph is on its way the frame is already its final size, on the
+   site's own paper, with the Meraki feather centred in it. Not a white box, not
+   a spinner, and never the browser's broken-file icon.
+   
+   The feather is a background image on purpose: if the asset is missing the
+   declaration simply does not paint and the frame stays a quiet cream panel —
+   a graceful floor rather than a broken one. */
+.rail-card .shot,.look .shot{
+  background-color:var(--sand);
+  background-image:url('img/meraki-feather.webp');
+  background-repeat:no-repeat;
+  background-position:50% 48%;
+  /* Small enough to read as a mark rather than a logo dropped on the page. */
+  background-size:28% auto}
+@media(max-width:640px){.rail-card .shot,.look .shot{background-size:34% auto}}
+
+/* The garment arrives over the feather rather than replacing it in one frame,
+   so there is no white flash and nothing moves. */
+.rail-card .shot img,.look .shot img{opacity:0;transition:opacity .45s ease}
+.rail-card .shot.is-loaded img,.look .shot.is-loaded img{opacity:1}
+/* Terminally failed: the image is taken out of the picture entirely so no
+   broken-file icon and no alt text can draw over the feather. The card itself
+   stays a link. */
+.rail-card .shot.is-failed img,.look .shot.is-failed img{visibility:hidden}
+/* Once a photograph is showing, the feather behind it has done its job. */
+.rail-card .shot.is-loaded,.look .shot.is-loaded{background-image:none}
+
+/* A breath, not an animation. Nothing spins and nothing bounces. */
+@keyframes featherBreathe{0%,100%{opacity:.5}50%{opacity:.8}}
+.rail-card .shot.is-waiting,.look .shot.is-waiting{
+  animation:featherBreathe 2.4s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){
+  .rail-card .shot.is-waiting,.look .shot.is-waiting{animation:none;opacity:.7}
+  .rail-card .shot img,.look .shot img{transition:none}
+}
+
+/* The customer tile's frame moved inside a span so it can carry the same
+   waiting state as a product card. */
+.look .shot{display:block;width:100%;height:100%;position:relative;overflow:hidden}
