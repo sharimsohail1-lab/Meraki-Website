@@ -1227,9 +1227,12 @@ function campaignSlideHTML(c, i) {
         + ' decoding="async">';
   }
 
+  /* No brand tagline in here. It is the same line on every campaign, so it is
+     written once outside the track — inside it, three identical copies would
+     slide past one another every time the campaign changed, which reads as the
+     line jumping rather than standing still. */
   return '<div class="hero-slide" data-slide="' + i + '">'
     + '<div class="hero-copy">'
-    + '<p class="eyebrow">Pakistani womenswear · made in Lahore</p>'
     + '<h2 class="display">' + esc(label) + '</h2>'
     + (blank(c.subheading) ? '' : '<p class="lede">' + esc(c.subheading) + '</p>')
     + '<a class="pill pill-dark slide-cta" href="' + esc(href) + '">' + esc(cta) + '</a>'
