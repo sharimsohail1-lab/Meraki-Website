@@ -742,6 +742,292 @@ function applySectionOrder() {
   });
 }
 
+/* ---------------------------------------------------------------------------
+ * Horizontal rails.
+ *
+ * One small controller for both, because they differ only in what they hold
+ * and whether they move on their own. Scroll-snap does the work — the track is
+ * a real scroller, so a trackpad, a touch drag, a keyboard and the arrows all
+ * drive the same thing and none of it is a bespoke drag implementation.
+ *
+ * "A page" is however many cards are actually visible, measured rather than
+ * assumed, so the same code gives two on a phone and four on a wide screen
+ * without a breakpoint table to keep in step with the CSS.
+ * ------------------------------------------------------------------------- */
+function railPage(track) {
+  var card = track.firstElementChild;
+  if (!card) return { size: 1, step: track.clientWidth };
+  var w = card.getBoundingClientRect().width;
+  var gap = parseFloat(getComputedStyle(track).columnGap || getComputedStyle(track).gap) || 0;
+  var per = Math.max(1, Math.round((track.clientWidth + gap) / (w + gap)));
+  return { size: per, step: per * (w + gap) };
+}
+
+function railSyncArrows(rail) {
+  var track = byId(rail.track);
+  var prev = byId(rail.prev);
+  var next = byId(rail.next);
+  if (!track || !prev || !next) return;
+  var over = track.scrollWidth - track.clientWidth;
+  /* Nothing to scroll means no controls at all, rather than two dead ones. */
+  var scrollable = over > 4;
+  prev.classList.toggle('hidden', !scrollable);
+  next.classList.toggle('hidden', !scrollable);
+  if (!scrollable) return;
+  prev.disabled = track.scrollLeft <= 2;
+  next.disabled = track.scrollLeft >= over - 2;
+}
+
+function railMove(rail, dir, manual) {
+  var track = byId(rail.track);
+  if (!track) return;
+  var page = railPage(track);
+  var over = track.scrollWidth - track.clientWidth;
+  var to = track.scrollLeft + dir * page.step;
+  /* Autoplay wraps so the rail keeps offering something; a manual move stops
+     at the end, because someone pressing "next" at the end meant the end. */
+  if (!manual && to > over - 2) to = 0;
+  to = Math.max(0, Math.min(to, over));
+
+  /* Automatic movement never slides an unresolved photograph into view. A
+     person asking to move is different: they are told nothing and made to
+     wait for a picture, so a manual move happens at once and the placeholder
+     carries the gap. */
+  if (!manual && !cardsReady(cardsAt(track, to))) {
+    preloadCards(cardsAt(track, to));
+    rail.waiting = true;
+    return;
+  }
+  rail.waiting = false;
+
+  track.scrollTo({ left: to, behavior: reducedMotion() ? 'auto' : 'smooth' });
+  /* One group ahead of wherever this move lands. */
+  preloadCards(cardsAt(track, Math.min(to + page.step, over)));
+  if (manual) railDelay(rail);
+}
+
+/* Autoplay never resumes instantly after a touch. The rail should never feel
+   like it is arguing with the person using it. */
+function railDelay(rail) {
+  if (!rail.interval) return;
+  if (rail.timer) { clearInterval(rail.timer); rail.timer = null; }
+  if (rail.resume) clearTimeout(rail.resume);
+  rail.resume = setTimeout(function () { railPlay(rail); }, rail.interval * 2);
+}
+
+function railPlay(rail) {
+  if (!rail.interval || reducedMotion()) return;
+  var track = byId(rail.track);
+  if (!track || track.scrollWidth - track.clientWidth <= 4) return;
+  /* Reaching the rail is the moment the next group becomes worth fetching. */
+  preloadCards(cardsAt(track, Math.min(track.scrollLeft + railPage(track).step,
+    track.scrollWidth - track.clientWidth)));
+  if (rail.timer) clearInterval(rail.timer);
+  rail.timer = setInterval(function () {
+    if (document.hidden) return;
+    railMove(rail, 1, false);
+  }, rail.interval);
+}
+
+function railStop(rail) {
+  if (rail.timer) { clearInterval(rail.timer); rail.timer = null; }
+  if (rail.resume) { clearTimeout(rail.resume); rail.resume = null; }
+}
+
+/* Bound once. Everything after this is the browser's own scrolling. */
+function bindRail(rail) {
+  if (rail.bound) return;
+  var track = byId(rail.track);
+  if (!track) return;
+  rail.bound = true;
+
+  var prev = byId(rail.prev), next = byId(rail.next);
+  if (prev) prev.addEventListener('click', function () { railMove(rail, -1, true); });
+  if (next) next.addEventListener('click', function () { railMove(rail, 1, true); });
+
+  track.addEventListener('scroll', function () { railSyncArrows(rail); }, { passive: true });
+  /* Any hand on the rail — a drag, a trackpad, a wheel — postpones autoplay. */
+  ['touchstart', 'pointerdown', 'wheel'].forEach(function (ev) {
+    track.addEventListener(ev, function () { railDelay(rail); }, { passive: true });
+  });
+
+  if (rail.interval) {
+    /* The timer starts when the section is actually reached, not when the page
+       loads — a rail that has already shuffled itself twice before anyone
+       scrolls to it has wasted the pieces it was showing. */
+    if (window.IntersectionObserver) {
+      rail.io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) railPlay(rail);
+          else railStop(rail);
+        });
+      }, { threshold: 0.4 });
+      rail.io.observe(track);
+    } else {
+      railPlay(rail);   /* no observer: better moving than never moving */
+    }
+  }
+
+  window.addEventListener('resize', function () { railSyncArrows(rail); });
+}
+
+var ARRIVALS_RAIL = { track: 'arrivals-track', prev: 'arrivals-prev', next: 'arrivals-next',
+  interval: 2000, timer: null, resume: null, bound: false, io: null, waiting: false };
+var SEEN_RAIL = { track: 'seen-track', prev: 'seen-prev', next: 'seen-next',
+  /* Deliberately no interval. Customer photographs are looked at, not shown. */
+  interval: 0, timer: null, resume: null, bound: false, io: null, waiting: false };
+
+/* A compact card for the rails. Same product contract and the same routing as
+   the grid card — only the frame is smaller, because a homepage rail should
+   offer many pieces without the page becoming very tall.
+
+   `eager` is for the cards that will already be on screen when the rail is
+   reached. Lazy-loading those was the whole reason the rail sat blank for a
+   couple of seconds: the browser waits for layout before it will even begin
+   fetching a lazy image, so the first two cards started late and finished
+   later. Everything past the first group stays lazy — a rail of twenty pieces
+   must not become twenty downloads. */
+var RAIL_SIZES = '(max-width:640px) 44vw, (max-width:1100px) 30vw, 260px';
+
+/* The most cards that can be on screen at once, across every breakpoint. Used
+   only to decide how many to load eagerly before layout exists to measure. */
+var RAIL_MAX_VISIBLE = 4;
+
+function railCardHTML(p, i) {
+  var eager = i < RAIL_MAX_VISIBLE;
+  var attrs = eager
+    ? 'loading="eager" fetchpriority="high" decoding="async"'
+    : 'loading="lazy" decoding="async"';
+  return '<a class="rail-card" href="#/product/' + esc(p.slug) + '">'
+    + '<div class="shot is-waiting">' + imgHTML(p.images[0], RAIL_SIZES, attrs) + '</div>'
+    + '<div class="meta"><p class="name">' + esc(p.name) + '</p>'
+    + '<p class="price">' + esc(p.price) + '</p></div></a>';
+}
+
+/* ---------------------------------------------------------------------------
+ * Image readiness.
+ *
+ * A photograph is "resolved" once the browser has finished with it either way
+ * — loaded, or failed for good. Both are terminal: a picture that will never
+ * arrive must not hold the rail still forever, so an error resolves exactly as
+ * a success does and only the placeholder stays behind.
+ * ------------------------------------------------------------------------- */
+function markResolved(img, ok) {
+  var shot = img.parentNode;
+  if (!shot) return;
+  img.dataset.resolved = '1';
+  shot.classList.remove('is-waiting');
+  /* Loaded: the garment crossfades up over the placeholder. Failed: the image
+     is taken out of the picture entirely rather than left to draw the
+     browser's broken-file icon, and the feather stays where it was. */
+  shot.classList.add(ok ? 'is-loaded' : 'is-failed');
+
+  /* A rail that held still for this photograph should go as soon as it
+     arrives, rather than sitting out the rest of a tick it already missed.
+     railPlay restarts the interval, so the move it was owed does not land on
+     top of the tick that was already due and advance two groups at once. */
+  if (ARRIVALS_RAIL.waiting) {
+    ARRIVALS_RAIL.waiting = false;
+    railMove(ARRIVALS_RAIL, 1, false);
+    railPlay(ARRIVALS_RAIL);
+  }
+}
+
+function watchRailImages(track) {
+  if (!track) return;
+  Array.prototype.forEach.call(track.querySelectorAll('img'), function (img) {
+    if (img.dataset.watched) return;
+    img.dataset.watched = '1';
+    /* Already in the cache: complete before a listener could ever fire. */
+    if (img.complete) {
+      markResolved(img, img.naturalWidth > 0);
+      return;
+    }
+    img.addEventListener('load', function () { markResolved(img, true); });
+    img.addEventListener('error', function () { markResolved(img, false); });
+  });
+}
+
+/* The cards whose photographs would be on screen at a given scroll position. */
+function cardsAt(track, left) {
+  var out = [];
+  var w = track.clientWidth;
+  Array.prototype.forEach.call(track.children, function (card) {
+    var x = card.offsetLeft - track.offsetLeft;
+    if (x + card.offsetWidth > left + 2 && x < left + w - 2) out.push(card);
+  });
+  return out;
+}
+
+function cardsReady(cards) {
+  return cards.every(function (card) {
+    var img = card.querySelector('img');
+    return !img || img.dataset.resolved === '1';
+  });
+}
+
+/* Start fetching a group before it is needed, so the two-second tick usually
+   finds it already there. One group ahead only — never the whole rail. */
+function preloadCards(cards) {
+  cards.forEach(function (card) {
+    var img = card.querySelector('img');
+    if (!img || img.dataset.resolved === '1') return;
+    if (img.loading === 'lazy') img.loading = 'eager';
+  });
+}
+
+
+/* One photograph for each piece someone has sent one in for.
+ *
+ * The homepage is a way into the catalogue, so a piece earns one tile however
+ * many photographs it has — four tiles of the same suit would crowd out three
+ * other pieces. The one chosen is the first in the order the PDP already uses,
+ * which mapImages settled: sort_order ascending, with a primary photograph
+ * hoisted in front. So reordering in the app, or deleting the first, changes
+ * what the homepage shows with nothing here to update.
+ *
+ * PRODUCTS holds only published, unarchived pieces, so eligibility is the
+ * catalogue's own and there is no second rule. The URL check is a secondary
+ * safety net for the same file arriving under two pieces — product-level
+ * selection has already done the real work. */
+function customerLooks() {
+  var out = [];
+  var seen = {};
+  newestFirst(PRODUCTS).forEach(function (p) {
+    var first = (p.customerPhotos || [])[0];
+    if (!first || blank(first.src) || seen[first.src]) return;
+    seen[first.src] = true;
+    out.push({ product: p, img: first });
+  });
+  return out;
+}
+
+var LOOK_SIZES = '(max-width:640px) 44vw, (max-width:1100px) 30vw, 240px';
+
+function renderCustomerLooks() {
+  var section = byId('home-seen');
+  var track = byId('seen-track');
+  if (!section || !track) return;
+
+  var looks = customerLooks();
+  section.classList.toggle('hidden', looks.length === 0);
+  if (!looks.length) { track.innerHTML = ''; railStop(SEEN_RAIL); return; }
+
+  track.innerHTML = looks.map(function (l, i) {
+    var eager = i < RAIL_MAX_VISIBLE;
+    return '<a class="look" href="#/product/' + esc(l.product.slug) + '"'
+      + ' aria-label="' + esc(l.product.name) + ' — seen on a customer">'
+      + '<span class="shot is-waiting">'
+      + imgHTML(l.img, LOOK_SIZES, eager
+        ? 'loading="eager" decoding="async"' : 'loading="lazy" decoding="async"')
+      + '</span></a>';
+  }).join('');
+
+  watchRailImages(track);
+  bindRail(SEEN_RAIL);
+  railSyncArrows(SEEN_RAIL);
+}
+
 function renderHomeSections() {
   var edit = homepageBlock('featured_edit');
   var arrivalsCfg = homepageBlock('new_arrivals');
@@ -771,19 +1057,45 @@ function renderHomeSections() {
      edit says where it goes with its own CTA. */
   byId('featured-more').classList.toggle('hidden', !!edit);
 
+  /* The pieces New Arrivals shows.
+   *
+   * When the app has expressed a selection, that selection is the answer and
+   * the storefront only resolves the ids — an id that no longer names a
+   * published piece simply is not found, so the rail shortens rather than
+   * showing a gap, and no count caps it. The seeding, the auto-adding and the
+   * sticky removals all stayed in the app, where there is one implementation
+   * of them.
+   *
+   * With no selection, the behaviour from before the app knew about this is
+   * kept exactly: the newest pieces, minus whatever the edit above already
+   * shows, capped by the configured count. */
   var arrivals = [];
   if (arrivalsCfg && arrivalsCfg.show !== false) {
-    var shown = {};
-    if (arrivalsCfg.exclude_featured !== false) {
-      featured.forEach(function (p) { shown[p.id] = true; });
+    if (arrivalsCfg.product_ids) {
+      arrivals = arrivalsCfg.product_ids.map(findProductById).filter(Boolean);
+    } else {
+      var shown = {};
+      if (arrivalsCfg.exclude_featured !== false) {
+        featured.forEach(function (p) { shown[p.id] = true; });
+      }
+      arrivals = newestFirst(PRODUCTS)
+        .filter(function (p) { return !shown[p.id]; })
+        .slice(0, arrivalsCfg.count > 0 ? arrivalsCfg.count : 0);
     }
-    arrivals = newestFirst(PRODUCTS)
-      .filter(function (p) { return !shown[p.id]; })
-      .slice(0, arrivalsCfg.count > 0 ? arrivalsCfg.count : 0);
   }
   byId('new-arrivals').classList.toggle('hidden', arrivals.length === 0);
-  byId('arrivals-grid').innerHTML = arrivals.map(function (p) { return cardHTML(p); }).join('');
+  byId('arrivals-track').innerHTML = arrivals.map(railCardHTML).join('');
   if (arrivalsCfg) byId('arrivals-title').textContent = arrivalsCfg.heading || 'New Arrivals';
+
+  if (arrivals.length) {
+    watchRailImages(byId('arrivals-track'));
+    bindRail(ARRIVALS_RAIL);
+    railSyncArrows(ARRIVALS_RAIL);
+  } else {
+    railStop(ARRIVALS_RAIL);
+  }
+
+  renderCustomerLooks();
 }
 
 /* The default hero's film, brought to life.
@@ -821,30 +1133,415 @@ function activateDefaultHero() {
    otherwise the film and copy already in the markup are left entirely alone,
    which is what keeps migration 029 from changing the site by existing. */
 var HERO_BTNROW = null;
+/* The unconfigured hero's own words and media, kept so that anything a
+   campaign does not specify can be put back rather than inherited. Without
+   this a second slide with no heading would wear the first slide's, and a
+   campaign with no media would sit under the previous campaign's film. */
+var HERO_DEFAULTS = null;
+
+function captureHeroDefaults() {
+  if (HERO_DEFAULTS) return;
+  var heading = byId('hero-heading');
+  var lede = $('.hero-copy .lede');
+  var film = $('.hero-film');
+  HERO_DEFAULTS = {
+    heading: heading ? heading.innerHTML : '',
+    lede: lede ? lede.textContent : '',
+    film: film ? film.innerHTML : ''
+  };
+}
+
+/* ---------------------------------------------------------------------------
+ * The hero carousel.
+ *
+ * One campaign is not a carousel and is deliberately not rendered as one: no
+ * dots, no timer, no listeners — exactly the single hero that existed before,
+ * so the common case carries none of this weight.
+ *
+ * Motion is the quietest thing that still reads as a change: a crossfade at an
+ * editorial pace, and none at all for anyone who has asked for reduced motion.
+ * ------------------------------------------------------------------------- */
+var HERO_INTERVAL = 5000;
+var hero = { slides: [], index: 0, timer: null, bound: false };
+
+function reducedMotion() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+/* Every campaign the app published, newest contract first. The singular field
+   is read only when the array is absent, which happens while a browser is
+   still holding a response cached from before campaigns existed. */
+function activeCampaigns() {
+  var many = HOMEPAGE && HOMEPAGE.campaigns;
+  if (many && many.length) return many;
+  var one = homepageBlock('campaign');
+  return one ? [one] : [];
+}
+
+function heroStopTimer() {
+  if (hero.timer) { clearInterval(hero.timer); hero.timer = null; }
+}
+
+/* Restarted rather than resumed after any manual move, so the slide someone
+   just chose gets its full reading time instead of the remainder of a tick
+   that was already half spent. */
+function heroStartTimer() {
+  heroStopTimer();
+  if (hero.slides.length < 2 || reducedMotion()) return;
+  if (document.hidden) return;
+  hero.timer = setInterval(function () { heroGo(hero.index + 1, false); }, HERO_INTERVAL);
+}
+
+/* A campaign whose artwork carries its own identity. Everything the app has
+   baked into the picture — the collection name, the title, the tagline — is in
+   the picture, so the site does not set it again in type beside it. */
+function hasArtwork(c) { return !!(c && c.media_url); }
+
+/* Every campaign gets a slide whether or not it has a picture: the words are
+   the campaign's identity again, so one without artwork is simply a slide with
+   nothing in its media column rather than a hole in the track. */
+
+/* One slide: the campaign's words beside its picture, which is the hero the
+   site had before artwork was expected to carry its own typography. The
+   difference from then is that every campaign builds one of these and they all
+   stay in the document — moving campaign slides the track rather than
+   repainting this one, which is what used to look like the page reloading.
+
+   Two links, never nested: the picture is one, the button is another, and both
+   carry the same destination from the same resolver. A control inside a link is
+   invalid nesting and browsers disagree about which one a click belongs to. */
+function campaignLabel(c, i) {
+  return blank(c.heading) ? 'Campaign ' + (i + 1) : c.heading;
+}
+function campaignHref(c) { return c.cta ? c.cta.href : '#/collection'; }
+function campaignCtaLabel(c) {
+  return c.cta && !blank(c.cta.label) ? c.cta.label : 'Shop Now';
+}
+
+/* One campaign's words.
+ *
+ * No brand tagline in here. It is the same line on every campaign, so it is
+ * written once outside the track — inside it, one copy per campaign would slide
+ * past the others every time the campaign changed, which reads as the line
+ * jumping rather than standing still.
+ *
+ * has-media is what the stylesheet reads to decide where this campaign's button
+ * belongs on a phone: over its photograph when it has one, in the words when it
+ * does not. The class travels with the campaign, so the decision is per
+ * campaign rather than per breakpoint-at-render-time. */
+function campaignSlideHTML(c, i) {
+  var label = campaignLabel(c, i);
+  var href = campaignHref(c);
+
+  return '<div class="hero-slide' + (hasArtwork(c) ? ' has-media' : '')
+    + '" data-slide="' + i + '">'
+    + '<div class="hero-copy">'
+    + '<h2 class="display">' + esc(label) + '</h2>'
+    + (blank(c.subheading) ? '' : '<p class="lede">' + esc(c.subheading) + '</p>')
+    + '<a class="pill pill-dark slide-cta" href="' + esc(href) + '">'
+    + esc(campaignCtaLabel(c)) + '</a>'
+    + '</div>'
+    + '</div>';
+}
+
+/* The same campaign's picture, in its own track.
+ *
+ * Two links, never nested: the picture is one, the button over it is another,
+ * and both carry the same destination from the same resolver. A control inside
+ * a link is invalid nesting and browsers disagree about which one a click
+ * belongs to.
+ *
+ * The overlay button is written for every campaign that has a picture and shown
+ * only on a phone, where the button sits on the photograph. It is a second
+ * element rather than the copy column's button moved across, because the two
+ * tracks are separate subtrees now and an element cannot be in both. The one
+ * the breakpoint does not want is display:none, so it is out of the tab order
+ * and out of the accessibility tree rather than merely invisible. */
+function campaignMediaSlideHTML(c, i) {
+  if (!hasArtwork(c)) return '<div class="hero-mslide" data-slide="' + i + '"></div>';
+
+  var label = campaignLabel(c, i);
+  var href = campaignHref(c);
+  var media = c.media_type === 'video'
+    /* The poster stands in until this slide is showing; mounting every
+       campaign's film would be several downloads for one hero. */
+    ? (c.media_poster_url
+      ? '<img src="' + esc(c.media_poster_url) + '" alt="" loading="lazy" decoding="async">' : '')
+    : '<img src="' + esc(c.media_url) + '" alt="' + esc(label) + '"'
+      + (i === 0 ? ' loading="eager" fetchpriority="high"' : ' loading="lazy"')
+      + ' decoding="async">';
+
+  return '<div class="hero-mslide" data-slide="' + i + '">'
+    + '<a class="hero-media" href="' + esc(href) + '" aria-label="' + esc(label) + '">'
+    + media + '</a>'
+    + '<a class="pill slide-cta slide-cta-over" href="' + esc(href) + '" tabindex="-1">'
+    + esc(campaignCtaLabel(c)) + '</a>'
+    + '</div>';
+}
+
+/* Every track the hero moves. Both are written and translated together, so a
+   campaign's words and its picture are never a frame apart. */
+function heroTracks() {
+  return [byId('campaign-track'), byId('campaign-media-track')].filter(Boolean);
+}
+
+/* Built once per settings change, not once per slide. This is the whole point
+   of the rewrite: the tracks and their pictures stay put, and changing campaign
+   moves them. Nothing is torn down and rebuilt, so nothing can flash. */
+function renderCampaignTrack(list) {
+  var copy = byId('campaign-track');
+  var media = byId('campaign-media-track');
+  if (copy) copy.innerHTML = list.map(campaignSlideHTML).join('');
+  if (media) media.innerHTML = list.map(campaignMediaSlideHTML).join('');
+
+  heroTracks().forEach(function (track) {
+    track.style.width = (list.length * 100) + '%';
+    Array.prototype.forEach.call(track.children, function (slide) {
+      slide.style.width = (100 / list.length) + '%';
+    });
+  });
+}
+
+/* Only the campaign on screen is reachable. Without this a keyboard runs
+   through every off-screen campaign's link on the way to the page. */
+function syncSlideFocus() {
+  heroTracks().forEach(function (track) {
+    Array.prototype.forEach.call(track.children, function (slide, i) {
+      var on = i === hero.index;
+      slide.setAttribute('aria-hidden', on ? 'false' : 'true');
+      /* The links inside an off-screen campaign are taken out of the tab order,
+         so a keyboard does not walk through every campaign on the way down the
+         page. The showing one is reachable exactly as any link is — except the
+         button the breakpoint is not using, which stays unreachable because it
+         is the same destination twice. */
+      Array.prototype.forEach.call(slide.querySelectorAll('a'), function (a) {
+        var spare = a.classList.contains('slide-cta-over')
+          && getComputedStyle(a).display === 'none';
+        if (on && !spare) a.removeAttribute('tabindex');
+        else a.setAttribute('tabindex', '-1');
+      });
+    });
+  });
+}
+
+/* One campaign ahead. A hero of six is not six downloads. */
+function preloadNextCampaign() {
+  var track = byId('campaign-media-track');
+  if (!track || hero.slides.length < 2) return;
+  var next = track.children[(hero.index + 1) % hero.slides.length];
+  var img = next && next.querySelector('img');
+  if (img && img.loading === 'lazy') img.loading = 'eager';
+}
+
+/* A campaign's film is mounted only while it is the one showing, and taken
+   down again on the way out — the conservative behaviour the single hero
+   already had, kept. */
+function syncSlideVideo() {
+  var track = byId('campaign-media-track');
+  if (!track) return;
+  Array.prototype.forEach.call(track.children, function (slide, i) {
+    var c = hero.slides[i];
+    var existing = slide.querySelector('video');
+    if (!c || c.media_type !== 'video' || !hasArtwork(c)) return;
+    var holder = slide.querySelector('.hero-media');
+    if (!holder) return;
+    if (i === hero.index) {
+      if (existing) return;
+      var poster = slide.querySelector('img');
+      if (poster) poster.style.display = 'none';
+      holder.insertAdjacentHTML('afterbegin',
+        '<video autoplay muted loop playsinline preload="auto"'
+        + ' disablepictureinpicture disableremoteplayback'
+        + (c.media_poster_url ? ' poster="' + esc(c.media_poster_url) + '"' : '')
+        + ' aria-hidden="true">'
+        + '<source src="' + esc(c.media_url) + '" type="video/mp4"></video>');
+    } else if (existing) {
+      existing.parentNode.removeChild(existing);
+      var back = slide.querySelector('img');
+      if (back) back.style.display = '';
+    }
+  });
+}
+
+function slideTo(index) {
+  if (!hero.slides.length) return;
+  var shift = 'translateX(-' + (index * (100 / hero.slides.length)) + '%)';
+  /* Both tracks, in the same frame. They carry the same number of slides at the
+     same widths, so one transform value moves the words and the picture
+     together — they cannot drift apart. */
+  heroTracks().forEach(function (track) { track.style.transform = shift; });
+}
+
+function renderHeroDots() {
+  var dots = byId('hero-dots');
+  if (!dots) return;
+  var many = hero.slides.length > 1;
+  dots.classList.toggle('hidden', !many);
+  if (!many) { dots.innerHTML = ''; return; }
+
+  dots.innerHTML = hero.slides.map(function (c, i) {
+    var on = i === hero.index;
+    return '<button class="hero-dot" type="button" role="tab"'
+      + ' aria-selected="' + (on ? 'true' : 'false') + '"'
+      + ' tabindex="' + (on ? '0' : '-1') + '"'
+      + ' data-hero-dot="' + i + '"'
+      + ' aria-label="Go to campaign ' + (i + 1) + '"></button>';
+  }).join('');
+}
+
+function heroGo(index, manual) {
+  if (!hero.slides.length) return;
+  var next = (index + hero.slides.length) % hero.slides.length;
+  if (next === hero.index && hero.slides.length > 1 && !manual) return;
+  hero.index = next;
+
+  document.body.setAttribute('data-theme', hero.slides[next].theme || 'default');
+  /* The track moves. Nothing is rebuilt, so there is no frame in which the
+     hero is empty. */
+  slideTo(next);
+  syncSlideFocus();
+  syncSlideVideo();
+  preloadNextCampaign();
+  renderHeroDots();
+  if (manual) heroStartTimer();
+}
+
+/* Bound once for the life of the page. The dots are rewritten on every slide,
+   so the listener is delegated rather than attached to buttons that are about
+   to be replaced. */
+function bindHero() {
+  if (hero.bound) return;
+  hero.bound = true;
+
+  var dots = byId('hero-dots');
+  if (dots) {
+    dots.addEventListener('click', function (e) {
+      var dot = e.target.closest('[data-hero-dot]');
+      if (dot) heroGo(Number(dot.dataset.heroDot), true);
+    });
+    /* Arrow keys along a tablist, which is what a row of dots announces
+       itself as. */
+    dots.addEventListener('keydown', function (e) {
+      var step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!step) return;
+      e.preventDefault();
+      heroGo(hero.index + step, true);
+      var now = dots.querySelector('[aria-selected="true"]');
+      if (now) now.focus();
+    });
+  }
+
+  var slot = $('.hero');
+  if (slot) {
+    var x0 = null, y0 = null;
+    slot.addEventListener('touchstart', function (e) {
+      if (hero.slides.length < 2) return;
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+    }, { passive: true });
+    slot.addEventListener('touchend', function (e) {
+      if (x0 === null || hero.slides.length < 2) return;
+      var dx = e.changedTouches[0].clientX - x0;
+      var dy = e.changedTouches[0].clientY - y0;
+      x0 = null;
+      /* Horizontal intent only: a vertical drag is the page scrolling. */
+      if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy)) return;
+      heroGo(hero.index + (dx < 0 ? 1 : -1), true);
+    }, { passive: true });
+  }
+
+  /* A hidden tab should not burn through the campaigns unseen. */
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) heroStopTimer();
+    else if (hero.slides.length > 1) heroStartTimer();
+  });
+}
 
 function renderCampaign() {
-  var hero = $('.hero-film');
+  var heroSlot = $('.hero-film');
   var row0 = $('.hero-copy .btnrow');
   /* Captured before anything can overwrite it, the same way the editorial hero
      photograph is: without this the swap is one-way, and a settings outage
      after a campaign had rendered would leave the hero with no way back. */
   if (HERO_BTNROW === null && row0) HERO_BTNROW = row0.innerHTML;
-
-  var c = homepageBlock('campaign');
+  captureHeroDefaults();
 
   /* Nothing is decided yet. Show neither hero rather than the wrong one: the
-     ground stays bare, the caption is held back, and no film is fetched. The
-     block keeps its size, so nothing moves when the answer arrives. */
+     waiting shell holds the hero's footprint on the site's own sand, and no
+     film is fetched. The markup starts in this state, so the shell is what the
+     first paint draws — deciding it here alone would be deciding it one paint
+     too late, which is the flash of "Timeless pieces" this removes.
+
+     The only way out of 'loading' is an answered request: loadSettings() sets
+     'ready' on success and 'error' on failure, and runs renderCampaign() again
+     either way. There is no path that leaves the shell up for good. */
+  var heroEl = $('.hero');
   if (homepageState === 'loading') {
-    if (hero) hero.setAttribute('data-hero', 'unresolved');
+    if (heroEl) heroEl.setAttribute('data-hero-state', 'loading');
+    if (heroSlot) heroSlot.setAttribute('data-hero', 'unresolved');
     return;
   }
+  if (heroEl) heroEl.setAttribute('data-hero-state', 'resolved');
+
+  var list = activeCampaigns();
+  hero.slides = list;
+  if (hero.index >= list.length) hero.index = 0;
+
+  var camp = byId('campaign-hero');
+  var copy = $('.hero-copy');
+
+  if (!list.length) {
+    heroStopTimer();
+    if (camp) camp.classList.add('hidden');
+    if (copy) copy.classList.remove('hidden');
+    if (heroSlot) heroSlot.classList.remove('hidden');
+    renderHeroDots();
+    paintCampaign(null, false);
+    return;
+  }
+
+  bindHero();
+  /* The copy column and the editorial film belong to the unconfigured
+     homepage. A campaign brings its own words and its own picture, so both
+     step aside while one is running and come back when none is. */
+  if (copy) copy.classList.add('hidden');
+  if (heroSlot) heroSlot.classList.add('hidden');
+  if (camp) camp.classList.remove('hidden');
+  document.body.setAttribute('data-theme',
+    (list[hero.index] && list[hero.index].theme) || 'default');
+  renderCampaignTrack(list);
+  slideTo(hero.index);
+  syncSlideFocus();
+  syncSlideVideo();
+  preloadNextCampaign();
+
+  renderHeroDots();
+  heroStartTimer();
+}
+
+/* Paints one campaign, or the default hero when given none. Everything that
+   used to be the body of renderCampaign, unchanged in what it does to a single
+   campaign — the carousel only decides which one is handed here. */
+function paintCampaign(c, many) {
+  var heroSlot = $('.hero-film');
+  var row0 = $('.hero-copy .btnrow');
 
   document.body.setAttribute('data-theme', (c && c.theme) || 'default');
 
   if (!c) {
     /* Settled: this hero is the one. Now the film is worth its bytes. */
-    if (hero) hero.setAttribute('data-hero', 'default');
+    if (heroSlot) {
+      heroSlot.setAttribute('data-hero', 'default');
+      /* A campaign may have replaced the film earlier in this page's life —
+         after a settings change, or on the way back from a slide. Put the
+         editorial hero's own markup back before asking it to play. */
+      if (HERO_DEFAULTS && !byId('hero-video')) heroSlot.innerHTML = HERO_DEFAULTS.film;
+    }
+    if (HERO_DEFAULTS) {
+      var h = byId('hero-heading');
+      if (h) h.innerHTML = HERO_DEFAULTS.heading;
+      var l0 = $('.hero-copy .lede');
+      if (l0) l0.textContent = HERO_DEFAULTS.lede;
+    }
     activateDefaultHero();
     if (row0 && HERO_BTNROW !== null) {
       row0.innerHTML = HERO_BTNROW;
@@ -853,11 +1550,27 @@ function renderCampaign() {
     return;
   }
 
-  if (hero) hero.setAttribute('data-hero', 'campaign');
+  if (heroSlot) {
+    heroSlot.setAttribute('data-hero', 'campaign');
+    /* The crossfade. Removed and re-added so the animation restarts on every
+       slide; skipped entirely under reduced motion, where the swap is instant. */
+    if (many && !reducedMotion()) {
+      heroSlot.classList.remove('hero-fade');
+      /* Reading offsetWidth is what makes the removal take effect before the
+         class goes back on — without it the two changes coalesce and nothing
+         animates. */
+      void heroSlot.offsetWidth;
+      heroSlot.classList.add('hero-fade');
+    }
+  }
 
-  if (!blank(c.heading)) byId('hero-heading').innerHTML = esc(c.heading);
+  byId('hero-heading').innerHTML = blank(c.heading)
+    ? (HERO_DEFAULTS ? HERO_DEFAULTS.heading : '') : esc(c.heading);
   var lede = $('.hero-copy .lede');
-  if (lede && !blank(c.subheading)) lede.textContent = c.subheading;
+  if (lede) {
+    lede.textContent = blank(c.subheading)
+      ? (HERO_DEFAULTS ? HERO_DEFAULTS.lede : '') : c.subheading;
+  }
 
   /* A configured campaign owns the hero's call to action completely, including
      the decision to have none at all. The two buttons in the markup belong to
@@ -924,10 +1637,15 @@ function placeCampaignCta(c) {
 
 /* One file, no responsive renditions — campaign media is app-managed and
      arrives as a single public URL. The film keeps the behaviour the Roselle
-     one has: muted, inline, its own taps, never wrapped in a link. */
-  if (c.media_url) {
-    var slot = $('.hero-film');
-    if (slot) {
+     one has: muted, inline, its own taps, never wrapped in a link.
+
+     Only the slide on screen has media in the document. That is what keeps a
+     hero of four films from being four downloads: the previous slide's video
+     element is gone before the next one is created, so the browser is never
+     asked for more than the campaign currently showing. */
+  var slot = $('.hero-film');
+  if (slot) {
+    if (c.media_url) {
       var caption = slot.querySelector('.film-tag');
       var media = c.media_type === 'video'
         ? '<video id="hero-video"' + (c.media_poster_url ? ' poster="' + esc(c.media_poster_url) + '"' : '')
@@ -937,6 +1655,13 @@ function placeCampaignCta(c) {
         : '<img class="campaign-img" src="' + esc(c.media_url) + '" alt="' + esc(c.heading || '') + '">';
       slot.innerHTML = media + (c.cta ? '' : (caption ? caption.outerHTML : ''));
       setupHeroFilm();
+    } else if (HERO_DEFAULTS) {
+      /* A campaign with words but no picture. The editorial hero comes back
+         under it rather than the previous slide's film staying put. */
+      slot.innerHTML = HERO_DEFAULTS.film;
+      var back = byId('hero-video');
+      if (back) delete back.dataset.activated;
+      activateDefaultHero();
     }
   }
 
@@ -1743,7 +2468,7 @@ function answerConsent(value) {
   else if (consent === 'accepted') initMetaPixel();
 })();
 
-var VIEWS = ['home', 'collection', 'product', 'inquiry', 'privacy'];
+var VIEWS = ['home', 'collection', 'product', 'inquiry', 'privacy', 'story'];
 
 function show(view) {
   VIEWS.forEach(function (v) { byId('view-' + v).classList.toggle('hidden', v !== view); });
@@ -1801,15 +2526,16 @@ function applyRoute() {
     renderBag(); show('inquiry'); window.scrollTo(0, 0); return;
   }
 
-  show('home');
+  /* Our Story has a page of its own now that the homepage band it used to
+     scroll to has become the customer photographs. Same address as before, so
+     the header link and any shared URL still land on the same words. */
   if (hash === 'story') {
-    var el = byId('story');
-    if (el) window.scrollTo({ top: el.offsetTop - 90, behavior: 'smooth' });
-  } else {
-    window.scrollTo(0, 0);
+    show('story'); window.scrollTo(0, 0); return;
   }
-}
 
+  show('home');
+  window.scrollTo(0, 0);
+}
 /* ---------- events (delegated) ---------- */
 document.addEventListener('click', function (e) {
   if (!e.target || !e.target.closest) return;

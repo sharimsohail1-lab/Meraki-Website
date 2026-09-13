@@ -90,7 +90,18 @@
 
 <!-- ============ HOME ============ -->
 <div class="view" id="view-home">
-  <section class="hero">
+  <!-- data-hero-state starts at "loading" in the markup, not in script, because
+       the answer to "which hero" lives behind /api/site-settings and the page
+       paints long before that lands. Anything decided in JS is decided after
+       the first paint, which is exactly the flash this attribute removes.
+       renderCampaign() flips it to "resolved" the moment the endpoint has
+       answered — either way it answers. -->
+  <section class="hero" data-hero-state="loading">
+    <!-- The waiting hero: the site's own sand, the Meraki feather, and the
+         final hero's footprint. Deliberately empty of words — a campaign is
+         about to replace this, and showing the unconfigured hero's headline in
+         the meantime advertises a collection that may not be the one running. -->
+    <div class="hero-shell" id="hero-shell" aria-hidden="true"></div>
     <div class="hero-copy">
       <p class="eyebrow">Pakistani womenswear · made in Lahore</p>
       <h1 class="display" id="hero-heading">Timeless pieces,<br><em>thoughtfully made.</em></h1>
@@ -131,6 +142,43 @@
       </video>
       <p class="film-tag"><a class="film-cta" href="#/collection" aria-label="Roselle Collection — view the collection">Roselle Collection</a></p>
     </div>
+
+    <!-- THE CAMPAIGN CAROUSEL. Empty and hidden until the app has published a
+         campaign; the editorial hero above is what shows until then, and is
+         what comes back if every campaign is switched off.
+
+         Written by renderCampaignTrack(). Each slide carries a campaign's own
+         words beside its own picture — the hero this site has always had — and
+         every slide stays in the document, so changing campaign translates the
+         track rather than tearing the hero down and building it again. -->
+    <div class="campaign-hero hidden" id="campaign-hero">
+      <!-- The left column: the brand's own line, then the campaigns' words.
+
+           The words and the picture travel in two tracks, not one. With a
+           single track the whole slide moved as one band, so every campaign's
+           photograph crossed the copy column on its way past — and passed
+           directly under the fixed tagline, which is what made the tagline look
+           like a sticker dropped on the hero. Two tracks moved in lockstep look
+           identical at rest and keep each campaign's picture inside the picture
+           column, so nothing opaque ever travels through the tagline's line. -->
+      <div class="hero-col">
+        <!-- The brand's own line, not a campaign's. Written once, in the
+             column's normal flow above the sliding copy — not floating over
+             it — so it holds still while campaigns change beneath it. -->
+        <p class="eyebrow campaign-tagline">Pakistani womenswear · made in Lahore</p>
+        <div class="hero-viewport hero-viewport-copy">
+          <div class="campaign-track" id="campaign-track"></div>
+        </div>
+      </div>
+      <div class="hero-viewport hero-viewport-media">
+        <div class="campaign-track" id="campaign-media-track"></div>
+      </div>
+    </div>
+    <!-- Dots for a hero of several campaigns. Written by the carousel and left
+         empty otherwise, so a single campaign — or none — carries no control
+         at all, not a hidden one. No arrows here on purpose: the hero moves on
+         its own, and arrowheads over campaign photography read as chrome. -->
+    <div class="hero-dots hidden" id="hero-dots" role="tablist" aria-label="Campaigns"></div>
   </section>
 
   <!-- FEATURED EDIT. The heading, the link label and where that link goes are
@@ -162,21 +210,38 @@
       <h2 class="serif" id="arrivals-title">New Arrivals</h2>
       <a class="textlink" href="#/collection">All pieces</a>
     </div>
-    <div class="grid small" id="arrivals-grid"></div>
+    <!-- A rail rather than a grid: the homepage should offer many pieces
+         without becoming very tall. Arrows here, unlike the hero, because this
+         one does not move until the visitor has reached it and they need a way
+         to drive it themselves. -->
+    <div class="rail" id="arrivals-rail">
+      <div class="rail-track" id="arrivals-track"></div>
+      <button class="rail-arrow rail-prev hidden" id="arrivals-prev" type="button" aria-label="Previous pieces">
+        <span aria-hidden="true">&lsaquo;</span>
+      </button>
+      <button class="rail-arrow rail-next hidden" id="arrivals-next" type="button" aria-label="Next pieces">
+        <span aria-hidden="true">&rsaquo;</span>
+      </button>
+    </div>
   </section>
 
-  <section class="split" id="story">
-    <div class="split-img">
-      <img src="img/p2.webp"
-           srcset="img/sm/p2.webp 560w, img/p2.webp 938w"
-           sizes="(max-width:860px) 100vw, 52vw"
-           alt="Meraki editorial — an ivory crepe jacket with resham bird and vine embroidery"
-           loading="lazy" decoding="async">
+  <!-- SEEN ON OUR CUSTOMERS. Assembled from the customer photographs already
+       carried by each product, so there is no second upload path and no second
+       store — the PDP and this section read the same images. Every photograph
+       is a link to the piece it belongs to: here it is social proof that leads
+       somewhere, not a gallery to open. -->
+  <section class="section hidden" id="home-seen" aria-labelledby="home-seen-title">
+    <div class="sec-head">
+      <h2 class="serif" id="home-seen-title">Seen on Our Customers</h2>
     </div>
-    <div class="split-copy">
-      <p class="eyebrow">Our story</p>
-      <p class="pull">Meraki — to leave a piece of yourself in what you make. Every panel is embroidered by hand, then cut for one woman at a time.</p>
-      <p class="body">Saima works with a small atelier in Lahore. Silks and raw cottons are sourced by the bolt, embroideries are drawn to order, and nothing is produced in volume — which is why some pieces exist only once.</p>
+    <div class="rail" id="seen-rail">
+      <div class="rail-track" id="seen-track"></div>
+      <button class="rail-arrow rail-prev hidden" id="seen-prev" type="button" aria-label="Previous photographs">
+        <span aria-hidden="true">&lsaquo;</span>
+      </button>
+      <button class="rail-arrow rail-next hidden" id="seen-next" type="button" aria-label="Next photographs">
+        <span aria-hidden="true">&rsaquo;</span>
+      </button>
     </div>
   </section>
 
@@ -409,6 +474,28 @@
     <p id="inq-response-note"></p>
     <button class="pill pill-ghost sm" data-nav="#/collection">Continue browsing</button>
   </div>
+</div>
+
+<!-- OUR STORY. It used to be a band on the homepage, which is where the
+     header's "Our Story" link scrolled to. The homepage gave that slot to
+     customer photographs, so rather than lose the copy — or leave the nav
+     pointing at nothing — the same words became a page of their own at the
+     same address. Nothing here is new writing. -->
+<div class="view hidden pagepad" id="view-story">
+  <section class="split story-page" id="story">
+    <div class="split-img">
+      <img src="img/p2.webp"
+           srcset="img/sm/p2.webp 560w, img/p2.webp 938w"
+           sizes="(max-width:860px) 100vw, 52vw"
+           alt="Meraki editorial — an ivory crepe jacket with resham bird and vine embroidery"
+           loading="lazy" decoding="async">
+    </div>
+    <div class="split-copy">
+      <p class="eyebrow">Our story</p>
+      <p class="pull">Meraki — to leave a piece of yourself in what you make. Every panel is embroidered by hand, then cut for one woman at a time.</p>
+      <p class="body">Saima works with a small atelier in Lahore. Silks and raw cottons are sourced by the bolt, embroideries are drawn to order, and nothing is produced in volume — which is why some pieces exist only once.</p>
+    </div>
+  </section>
 </div>
 
 <!-- Reachable without accepting anything: it is the page that explains what

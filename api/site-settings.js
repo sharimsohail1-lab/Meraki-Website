@@ -229,13 +229,70 @@ function publicSectionOrder(raw) {
   return order;
 }
 
-function publicNewArrivals(raw) {
+/* The ordered campaigns the app now keeps. Each one goes through exactly the
+   same public transformation as the single campaign did — same allowlist, same
+   media rules, same CTA resolution, same "an untouched form is not a campaign"
+   test — so a slide can never carry a field the single hero would have refused.
+
+   Order is the app's array order. A campaign the app switched off, or one that
+   says nothing, drops out here rather than reaching the browser as a slide it
+   has to know to skip. */
+function publicCampaigns(raw, ctx) {
+  if (!Array.isArray(raw)) return null;
+  var out = raw
+    .map(function (c) { return publicCampaign(c, ctx); })
+    .filter(Boolean);
+  return out.length ? out : null;
+}
+
+/* The pieces the app chose for New Arrivals, already resolved.
+
+   The app owns the rule — seeded from the newest eligible pieces, new ones
+   added as they publish, manual additions and sticky removals on top. All the
+   storefront needs is the answer, so the answer is what it gets: an ordered
+   list of ids with the removals already taken out. Rebuilding that rule in
+   browser JavaScript would mean two implementations of one policy, drifting.
+
+   Absent means the app has never expressed a selection, and null is how that
+   is said — the storefront then keeps the count-based behaviour it had. */
+function publicNewArrivalsSelection(raw) {
   if (!isObject(raw)) return null;
+  var included = Array.isArray(raw.included_ids) ? raw.included_ids : null;
+  if (!included) return null;
+
+  var excluded = {};
+  (Array.isArray(raw.excluded_ids) ? raw.excluded_ids : []).forEach(function (id) {
+    var v = text(id);
+    if (v) excluded[v] = true;
+  });
+
+  var seen = {};
+  var ids = included
+    .map(text)
+    .filter(function (id) {
+      if (!id || excluded[id] || seen[id]) return false;
+      seen[id] = true;
+      return true;
+    });
+  return ids.length ? ids : [];
+}
+
+function publicNewArrivals(raw, selection) {
+  var ids = publicNewArrivalsSelection(selection);
+  if (!isObject(raw)) {
+    /* A selection with no settings block is still a decision: the app has
+       chosen these pieces, so the section shows them under its default name. */
+    return ids ? { show: true, heading: 'New Arrivals', count: null,
+      exclude_featured: false, product_ids: ids } : null;
+  }
   return {
     show: raw.show !== false,
     heading: text(raw.heading) || 'New Arrivals',
     count: clampCount(raw.count, 4),
-    exclude_featured: raw.exclude_featured !== false
+    exclude_featured: raw.exclude_featured !== false,
+    /* Null rather than [] when the app has not chosen: the two mean different
+       things, and only one of them should silence the section. */
+    product_ids: ids
   };
 }
 
@@ -249,9 +306,14 @@ function publicHomepage(rawConfig, ctx) {
   if (!isObject(cfg) || Object.keys(cfg).length === 0) return null;
   return {
     section_order: publicSectionOrder(cfg.section_order),
+    /* The ordered set the storefront now prefers. */
+    campaigns: publicCampaigns(cfg.campaigns, ctx),
+    /* Kept for the transition only: a browser holding a script from before
+       carousels existed still finds the hero it knows how to render. It goes
+       when the app retires its own singular mirror. */
     campaign: publicCampaign(cfg.campaign, ctx),
     featured_edit: publicFeaturedEdit(cfg.featured_edit, ctx),
-    new_arrivals: publicNewArrivals(cfg.new_arrivals)
+    new_arrivals: publicNewArrivals(cfg.new_arrivals, cfg.new_arrivals_selection)
     /* customer_looks is reserved and deliberately not surfaced. */
   };
 }
