@@ -1210,74 +1210,123 @@ function hasArtwork(c) { return !!(c && c.media_url); }
    Two links, never nested: the picture is one, the button is another, and both
    carry the same destination from the same resolver. A control inside a link is
    invalid nesting and browsers disagree about which one a click belongs to. */
+function campaignLabel(c, i) {
+  return blank(c.heading) ? 'Campaign ' + (i + 1) : c.heading;
+}
+function campaignHref(c) { return c.cta ? c.cta.href : '#/collection'; }
+function campaignCtaLabel(c) {
+  return c.cta && !blank(c.cta.label) ? c.cta.label : 'Shop Now';
+}
+
+/* One campaign's words.
+ *
+ * No brand tagline in here. It is the same line on every campaign, so it is
+ * written once outside the track — inside it, one copy per campaign would slide
+ * past the others every time the campaign changed, which reads as the line
+ * jumping rather than standing still.
+ *
+ * has-media is what the stylesheet reads to decide where this campaign's button
+ * belongs on a phone: over its photograph when it has one, in the words when it
+ * does not. The class travels with the campaign, so the decision is per
+ * campaign rather than per breakpoint-at-render-time. */
 function campaignSlideHTML(c, i) {
-  var label = blank(c.heading) ? 'Campaign ' + (i + 1) : c.heading;
-  var href = c.cta ? c.cta.href : '#/collection';
-  var cta = c.cta && !blank(c.cta.label) ? c.cta.label : 'Shop Now';
+  var label = campaignLabel(c, i);
+  var href = campaignHref(c);
 
-  var media = '';
-  if (hasArtwork(c)) {
-    media = c.media_type === 'video'
-      /* The poster stands in until this slide is showing; mounting every
-         campaign's film would be several downloads for one hero. */
-      ? (c.media_poster_url
-        ? '<img src="' + esc(c.media_poster_url) + '" alt="" loading="lazy" decoding="async">' : '')
-      : '<img src="' + esc(c.media_url) + '" alt="' + esc(label) + '"'
-        + (i === 0 ? ' loading="eager" fetchpriority="high"' : ' loading="lazy"')
-        + ' decoding="async">';
-  }
-
-  /* No brand tagline in here. It is the same line on every campaign, so it is
-     written once outside the track — inside it, three identical copies would
-     slide past one another every time the campaign changed, which reads as the
-     line jumping rather than standing still. */
-  return '<div class="hero-slide" data-slide="' + i + '">'
+  return '<div class="hero-slide' + (hasArtwork(c) ? ' has-media' : '')
+    + '" data-slide="' + i + '">'
     + '<div class="hero-copy">'
     + '<h2 class="display">' + esc(label) + '</h2>'
     + (blank(c.subheading) ? '' : '<p class="lede">' + esc(c.subheading) + '</p>')
-    + '<a class="pill pill-dark slide-cta" href="' + esc(href) + '">' + esc(cta) + '</a>'
+    + '<a class="pill pill-dark slide-cta" href="' + esc(href) + '">'
+    + esc(campaignCtaLabel(c)) + '</a>'
     + '</div>'
-    + (media
-      ? '<a class="hero-media" href="' + esc(href) + '" aria-label="' + esc(label) + '">'
-        + media + '</a>'
-      : '')
     + '</div>';
 }
 
+/* The same campaign's picture, in its own track.
+ *
+ * Two links, never nested: the picture is one, the button over it is another,
+ * and both carry the same destination from the same resolver. A control inside
+ * a link is invalid nesting and browsers disagree about which one a click
+ * belongs to.
+ *
+ * The overlay button is written for every campaign that has a picture and shown
+ * only on a phone, where the button sits on the photograph. It is a second
+ * element rather than the copy column's button moved across, because the two
+ * tracks are separate subtrees now and an element cannot be in both. The one
+ * the breakpoint does not want is display:none, so it is out of the tab order
+ * and out of the accessibility tree rather than merely invisible. */
+function campaignMediaSlideHTML(c, i) {
+  if (!hasArtwork(c)) return '<div class="hero-mslide" data-slide="' + i + '"></div>';
+
+  var label = campaignLabel(c, i);
+  var href = campaignHref(c);
+  var media = c.media_type === 'video'
+    /* The poster stands in until this slide is showing; mounting every
+       campaign's film would be several downloads for one hero. */
+    ? (c.media_poster_url
+      ? '<img src="' + esc(c.media_poster_url) + '" alt="" loading="lazy" decoding="async">' : '')
+    : '<img src="' + esc(c.media_url) + '" alt="' + esc(label) + '"'
+      + (i === 0 ? ' loading="eager" fetchpriority="high"' : ' loading="lazy"')
+      + ' decoding="async">';
+
+  return '<div class="hero-mslide" data-slide="' + i + '">'
+    + '<a class="hero-media" href="' + esc(href) + '" aria-label="' + esc(label) + '">'
+    + media + '</a>'
+    + '<a class="pill slide-cta slide-cta-over" href="' + esc(href) + '" tabindex="-1">'
+    + esc(campaignCtaLabel(c)) + '</a>'
+    + '</div>';
+}
+
+/* Every track the hero moves. Both are written and translated together, so a
+   campaign's words and its picture are never a frame apart. */
+function heroTracks() {
+  return [byId('campaign-track'), byId('campaign-media-track')].filter(Boolean);
+}
+
 /* Built once per settings change, not once per slide. This is the whole point
-   of the rewrite: the track and its pictures stay put, and changing campaign
-   moves the track. Nothing is torn down and rebuilt, so nothing can flash. */
+   of the rewrite: the tracks and their pictures stay put, and changing campaign
+   moves them. Nothing is torn down and rebuilt, so nothing can flash. */
 function renderCampaignTrack(list) {
-  var track = byId('campaign-track');
-  if (!track) return;
-  track.innerHTML = list.map(campaignSlideHTML).join('');
-  track.style.width = (list.length * 100) + '%';
-  Array.prototype.forEach.call(track.children, function (slide) {
-    slide.style.width = (100 / list.length) + '%';
+  var copy = byId('campaign-track');
+  var media = byId('campaign-media-track');
+  if (copy) copy.innerHTML = list.map(campaignSlideHTML).join('');
+  if (media) media.innerHTML = list.map(campaignMediaSlideHTML).join('');
+
+  heroTracks().forEach(function (track) {
+    track.style.width = (list.length * 100) + '%';
+    Array.prototype.forEach.call(track.children, function (slide) {
+      slide.style.width = (100 / list.length) + '%';
+    });
   });
 }
 
 /* Only the campaign on screen is reachable. Without this a keyboard runs
    through every off-screen campaign's link on the way to the page. */
 function syncSlideFocus() {
-  var track = byId('campaign-track');
-  if (!track) return;
-  Array.prototype.forEach.call(track.children, function (slide, i) {
-    var on = i === hero.index;
-    slide.setAttribute('aria-hidden', on ? 'false' : 'true');
-    /* The links inside an off-screen campaign are taken out of the tab order,
-       so a keyboard does not walk through every campaign on the way down the
-       page. The showing one is reachable exactly as any link is. */
-    Array.prototype.forEach.call(slide.querySelectorAll('a'), function (a) {
-      if (on) a.removeAttribute('tabindex');
-      else a.setAttribute('tabindex', '-1');
+  heroTracks().forEach(function (track) {
+    Array.prototype.forEach.call(track.children, function (slide, i) {
+      var on = i === hero.index;
+      slide.setAttribute('aria-hidden', on ? 'false' : 'true');
+      /* The links inside an off-screen campaign are taken out of the tab order,
+         so a keyboard does not walk through every campaign on the way down the
+         page. The showing one is reachable exactly as any link is — except the
+         button the breakpoint is not using, which stays unreachable because it
+         is the same destination twice. */
+      Array.prototype.forEach.call(slide.querySelectorAll('a'), function (a) {
+        var spare = a.classList.contains('slide-cta-over')
+          && getComputedStyle(a).display === 'none';
+        if (on && !spare) a.removeAttribute('tabindex');
+        else a.setAttribute('tabindex', '-1');
+      });
     });
   });
 }
 
 /* One campaign ahead. A hero of six is not six downloads. */
 function preloadNextCampaign() {
-  var track = byId('campaign-track');
+  var track = byId('campaign-media-track');
   if (!track || hero.slides.length < 2) return;
   var next = track.children[(hero.index + 1) % hero.slides.length];
   var img = next && next.querySelector('img');
@@ -1288,7 +1337,7 @@ function preloadNextCampaign() {
    down again on the way out — the conservative behaviour the single hero
    already had, kept. */
 function syncSlideVideo() {
-  var track = byId('campaign-track');
+  var track = byId('campaign-media-track');
   if (!track) return;
   Array.prototype.forEach.call(track.children, function (slide, i) {
     var c = hero.slides[i];
@@ -1315,9 +1364,12 @@ function syncSlideVideo() {
 }
 
 function slideTo(index) {
-  var track = byId('campaign-track');
-  if (!track || !hero.slides.length) return;
-  track.style.transform = 'translateX(-' + (index * (100 / hero.slides.length)) + '%)';
+  if (!hero.slides.length) return;
+  var shift = 'translateX(-' + (index * (100 / hero.slides.length)) + '%)';
+  /* Both tracks, in the same frame. They carry the same number of slides at the
+     same widths, so one transform value moves the words and the picture
+     together — they cannot drift apart. */
+  heroTracks().forEach(function (track) { track.style.transform = shift; });
 }
 
 function renderHeroDots() {
@@ -1414,12 +1466,21 @@ function renderCampaign() {
   captureHeroDefaults();
 
   /* Nothing is decided yet. Show neither hero rather than the wrong one: the
-     ground stays bare, the caption is held back, and no film is fetched. The
-     block keeps its size, so nothing moves when the answer arrives. */
+     waiting shell holds the hero's footprint on the site's own sand, and no
+     film is fetched. The markup starts in this state, so the shell is what the
+     first paint draws — deciding it here alone would be deciding it one paint
+     too late, which is the flash of "Timeless pieces" this removes.
+
+     The only way out of 'loading' is an answered request: loadSettings() sets
+     'ready' on success and 'error' on failure, and runs renderCampaign() again
+     either way. There is no path that leaves the shell up for good. */
+  var heroEl = $('.hero');
   if (homepageState === 'loading') {
+    if (heroEl) heroEl.setAttribute('data-hero-state', 'loading');
     if (heroSlot) heroSlot.setAttribute('data-hero', 'unresolved');
     return;
   }
+  if (heroEl) heroEl.setAttribute('data-hero-state', 'resolved');
 
   var list = activeCampaigns();
   hero.slides = list;

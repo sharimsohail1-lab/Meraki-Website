@@ -508,6 +508,60 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
    moves when the answer arrives — the caption simply appears with it. */
 .hero-film[data-hero="unresolved"] .film-tag{visibility:hidden}
 
+/* ---------- the waiting hero ---------- */
+
+/* Which hero belongs on this page is a question only /api/site-settings can
+   answer, and the page paints long before it does. Until then the unconfigured
+   hero is not a neutral placeholder — it is a specific headline about a
+   specific collection — so showing it and then replacing it advertises the
+   wrong thing and flashes on the way out.
+
+   The shell is what the first paint draws instead: the site's own sand, the
+   Meraki feather, and the footprint the real hero will take. No words, no
+   picture, no button. The markup ships in this state; script only ever leaves
+   it, and leaves it on failure as surely as on success. */
+.hero-shell{display:none}
+/* The hero's own height, part for part, so the answer arriving does not move
+   the page under someone who has already started reading: the picture's frame,
+   the cream block of words above it where there is one, and the dots' row. The
+   dots' row is the same three numbers the row itself is built from, so the two
+   cannot drift apart. */
+:root{--hero-dots-h:calc(clamp(11px,1.2vw,15px) + 7px + clamp(18px,2vw,24px));
+  --hero-shell-cream:0px}
+.hero[data-hero-state="loading"] .hero-shell{
+  display:block;flex:1 0 100%;position:relative;background:var(--sand);
+  min-height:calc(clamp(420px,70vh,780px) + var(--hero-shell-cream) + var(--hero-dots-h))}
+/* The same feather the loading cards use, at the same weight. If the asset is
+   missing the layer does not paint and a quiet sand panel is left — a graceful
+   floor rather than a broken one. */
+.hero[data-hero-state="loading"] .hero-shell::before{
+  content:'';position:absolute;inset:0;
+  background-image:url('img/meraki-feather.webp');
+  background-repeat:no-repeat;background-position:50% 50%;
+  background-size:min(300px,26%) auto;opacity:.42;
+  animation:featherBreathe 2.6s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){
+  .hero[data-hero-state="loading"] .hero-shell::before{animation:none}
+}
+/* Everything the answer might turn out to be, held back until it is the
+   answer. Direct children only: the campaign slides have a .hero-copy of their
+   own, and it is inside #campaign-hero, which is hidden here anyway. */
+.hero[data-hero-state="loading"] > .hero-copy,
+.hero[data-hero-state="loading"] > .hero-film,
+.hero[data-hero-state="loading"] > .campaign-hero,
+.hero[data-hero-state="loading"] > .hero-dots{display:none}
+@media(max-width:899px){
+  /* Stacked, the real hero is its cream block above the photograph: the brand
+     line, a title and a subtitle. Measured rather than derived — the title's
+     height is the campaign's words, which nothing here can know in advance. */
+  :root{--hero-shell-cream:123px}
+  .hero[data-hero-state="loading"] .hero-shell{
+    min-height:calc(clamp(400px,58vh,580px) + var(--hero-shell-cream) + var(--hero-dots-h))}
+  .hero[data-hero-state="loading"] .hero-shell::before{background-size:58% auto}
+}
+/* Narrow enough that the brand line takes two lines rather than one. */
+@media(max-width:383px){:root{--hero-shell-cream:138px}}
+
 /* Photographs customers sent in. Quiet on purpose: the same micro-caps label
    the rest of the page uses, no card, no border, no badge — the photographs
    carry the trust, and dressing them up as a review widget would undercut the
@@ -750,14 +804,26 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
 
 /* ---------- campaign carousel ---------- */
 
-/* Full width of the hero row, so a running campaign takes the whole hero. */
+/* Full width of the hero row, so a running campaign takes the whole hero, and
+   itself the two-column row: the words on the left, the pictures on the right.
+   The columns are the tracks' containers rather than a single slide's halves,
+   which is what keeps each campaign's photograph inside the picture column
+   while the hero changes. */
 .campaign-hero{flex:1 0 100%;min-width:0;position:relative;
-  /* One offset drives both the fixed tagline and the space the slide copy
-     reserves for it, so the two cannot drift apart. Set a little above the
-     middle of the photograph: a mechanical centre reads as lower than centre
-     against a tall image. */
+  display:flex;flex-wrap:wrap;align-items:stretch;
+  /* Where the brand line — and with it the whole campaign text block — sits.
+     A little above the middle of the photograph: a mechanical centre reads as
+     lower than centre against a tall image. */
   --hero-top:clamp(80px,13vw,190px)}
-.hero-viewport{position:relative;width:100%;overflow:hidden}
+
+/* The left column. The tagline lives here in normal flow and the sliding copy
+   takes the space underneath it, so campaign words occupy the room below the
+   brand line instead of travelling through it. */
+.hero-col{flex:0 0 53%;max-width:53%;min-width:0;display:flex;flex-direction:column}
+
+.hero-viewport{position:relative;min-width:0;overflow:hidden}
+.hero-viewport-copy{flex:1 1 auto;width:100%}
+.hero-viewport-media{flex:0 0 47%;max-width:47%}
 
 /* All the slides, side by side. Width is set inline from the slide count, and
    changing campaign is a translate of this one element — which is what stops a
@@ -766,42 +832,55 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
   transition:transform .85s cubic-bezier(.33,.1,.2,1);will-change:transform}
 @media(prefers-reduced-motion:reduce){.campaign-track{transition:none}}
 
-/* One slide: the campaign's words in a column beside its photograph.
-   The text column takes a little more than half so portrait-origin pictures
-   are not asked to fill a wide frame — the garment is cropped less and the
-   words get room to breathe. */
-.hero-slide{flex:0 0 auto;display:flex;flex-wrap:wrap;align-items:stretch;min-width:0}
-.hero-slide .hero-copy{flex:0 0 53%;max-width:53%;display:flex;flex-direction:column;
+/* One campaign's words. It fills its column: the 53/47 split belongs to the
+   two columns now, not to the halves of a slide. */
+.hero-slide{flex:0 0 auto;min-width:0;display:block}
+.hero-slide .hero-copy{display:flex;flex-direction:column;
   justify-content:flex-start;gap:22px;
-  /* Optically a little above centre, which reads better than a mechanical
-     middle against a tall photograph. The top pad also clears the fixed
-     tagline, which is positioned into exactly this space. */
-  padding:calc(var(--hero-top) + 30px) clamp(24px,5vw,84px) clamp(48px,7vw,110px)}
+  /* The gap under the brand line. The line itself is above this box, in the
+     column's flow, so nothing here has to reserve room for it. */
+  padding:13px clamp(24px,5vw,84px) clamp(48px,7vw,110px)}
 .hero-slide .display{margin:0;font:300 clamp(36px,4.6vw,72px)/1.05 var(--serif);
   letter-spacing:-.01em;text-wrap:pretty}
 /* The subtitle belongs to the title, so it sits close under it. */
 .hero-slide .lede{margin:-8px 0 0}
 
+/* One campaign's picture, in the picture track. */
+.hero-mslide{flex:0 0 auto;min-width:0;position:relative;display:block}
 /* The picture keeps a fixed height per breakpoint, so campaigns whose source
    images differ in shape do not move the page when one follows another. */
-.hero-slide .hero-media{flex:0 0 47%;max-width:47%;position:relative;display:block;
+.hero-mslide .hero-media{position:relative;display:block;width:100%;
   min-height:clamp(420px,70vh,780px);background:var(--stone);overflow:hidden}
-.hero-slide .hero-media img,.hero-slide .hero-media video{
+.hero-mslide .hero-media img,.hero-mslide .hero-media video{
   position:absolute;inset:0;width:100%;height:100%;
   /* Fill the frame without distorting. The garment sits high in most of these
      photographs, which is where the editorial hero already looked. */
   object-fit:cover;object-position:50% 22%}
-.hero-slide .hero-media:focus-visible{outline:2px solid var(--plum);outline-offset:-4px}
+.hero-mslide .hero-media:focus-visible{outline:2px solid var(--plum);outline-offset:-4px}
 
-/* The brand line, written once and held still while campaigns move behind it.
-   Placed into the space the slide copy reserves at its top, so it reads as the
-   first line of that column rather than as a floating label. */
-.campaign-tagline{position:absolute;z-index:2;
-  top:var(--hero-top);left:clamp(24px,5vw,84px);
-  margin:0;pointer-events:none}
+/* The brand line, written once, in the left column's flow above the sliding
+   copy. In flow rather than floating: an absolutely placed line sat inside the
+   band the tracks travel through, so every campaign's photograph crossed
+   underneath it on its way past. Here the sliding copy simply begins below it.
+
+   The three lines of this column — this one, the title and the subtitle — are
+   set from one left edge. The optical nudge is the difference between where
+   Jost's tracked uppercase puts its first stem and where the serif title puts
+   its own at the same box edge; measured off the painted page, not guessed, and
+   expressed in em so it holds at every size the line takes. It is a property of
+   this typographic pair, so it applies to every campaign alike and to none in
+   particular. */
+.campaign-tagline{margin:var(--hero-top) 0 0 clamp(24px,5vw,84px);
+  padding-left:var(--optical-eyebrow);pointer-events:none}
+:root{--optical-eyebrow:.06em}
 
 /* Understated, and the same destination as the picture beside it. */
 .slide-cta{align-self:flex-start;text-decoration:none}
+/* The button over the photograph is a phone's layout. On a wide screen the
+   campaign's button belongs with its words, so this one is not merely hidden —
+   display:none keeps the duplicate destination out of the tab order and out of
+   the accessibility tree. */
+.slide-cta-over{display:none}
 
 @media(max-width:899px){
   /* Stacked. The cream block is now only as tall as the words in it: the
@@ -809,41 +888,40 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
      starts straight after. The button has moved onto the picture, which is
      what takes the most height out of this block. */
   .campaign-hero{padding-top:clamp(16px,4.2vw,22px)}
+  /* Both columns take the full width and stack, words above picture. */
+  .hero-col{flex:1 1 100%;max-width:100%}
+  .hero-viewport-media{flex:1 1 100%;max-width:100%}
   /* Margin rather than padding, so the line's box shares the exact left edge
      with the title and subtitle beneath it rather than merely looking as if
-     it does. */
-  .campaign-tagline{position:static;margin:0 var(--pad) 8px}
-  .hero-slide{position:relative}
+     it does — with the same optical nudge the wide screen uses. */
+  .campaign-tagline{margin:0 var(--pad) 8px}
   /* The four gaps above the photograph are one composition: the block came
      down by tightening every one of them rather than by moving the saved
      space somewhere else. */
-  .hero-slide .hero-copy{flex:1 1 100%;max-width:100%;gap:0;
-    padding:0 var(--pad) clamp(13px,3.4vw,18px)}
+  .hero-slide .hero-copy{gap:0;padding:0 var(--pad) clamp(13px,3.4vw,18px)}
   .hero-slide .display{font-size:clamp(32px,8.4vw,46px)}
-  /* One gutter for all three lines, so the tagline, the title and the subtitle
-     share an exact left edge rather than nearly sharing one. */
   /* Close enough under the title to read as its subtitle. The measured gap
      between the painted glyphs lands around 11px, which is the intent; the
      margin itself is smaller because the subtitle's line box carries leading
      of its own above the cap height. */
   .hero-slide .lede{margin:6px 0 0;max-width:34ch}
-  .hero-slide .hero-media{flex:1 1 100%;max-width:100%;
-    min-height:clamp(400px,58vh,580px)}
+  .hero-mslide .hero-media{min-height:clamp(400px,58vh,580px)}
 
   /* On a phone the button sits on the photograph, bottom left. It is a sibling
      of the picture's link rather than inside it — a control nested in a link is
-     invalid, and this way both are ordinary links to the same place. */
-  .hero-slide .slide-cta{position:absolute;z-index:3;
+     invalid, and this way both are ordinary links to the same place. It lives
+     in the picture track so it travels with the picture it belongs to. */
+  .hero-mslide .slide-cta-over{display:inline-block;position:absolute;z-index:3;
     left:var(--pad);bottom:clamp(16px,4vw,26px);
     padding:11px 20px;
     border:1px solid rgba(255,255,255,.7);
     background:rgba(28,18,22,.34);
     -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
     color:#fff;font-size:10px;letter-spacing:.18em}
-  .hero-slide .slide-cta:hover{background:rgba(28,18,22,.5);border-color:#fff;color:#fff}
-  /* A campaign with no picture has nothing to sit on, so the button stays in
-     the words where it can still be seen. */
-  .hero-slide:not(:has(.hero-media)) .slide-cta{position:static;
-    margin-top:18px;border:none;background:var(--ink);color:var(--ground);
-    backdrop-filter:none;-webkit-backdrop-filter:none;padding:16px 32px}
+  .hero-mslide .slide-cta-over:hover{background:rgba(28,18,22,.5);border-color:#fff;color:#fff}
+  /* With the button on the picture, the copy column's own button would be the
+     same destination twice. The campaign that has no picture keeps it: there is
+     nothing for the button to sit on, so it stays in the words. */
+  .hero-slide.has-media .slide-cta{display:none}
+  .hero-slide:not(.has-media) .slide-cta{margin-top:18px}
 }
