@@ -124,33 +124,75 @@ function clampCount(value, fallback) {
   return Math.max(COUNT_MIN, Math.min(COUNT_MAX, Math.round(n)));
 }
 
-/* A CTA is resolved to a label and a real address here, never handed to the
-   browser as a raw href the app could have written. A destination that no
-   longer resolves — deleted, hidden, mistyped — yields nothing at all, because
-   guessing a different page is worse than showing no button. */
-function resolveCta(block, ctx) {
+/* Where a campaign's call to action points, resolved to a real address here and
+   never handed to the browser as a raw href the app could have written. A
+   destination that no longer resolves — deleted, hidden, mistyped — yields
+   nothing at all, because guessing a different page is worse than showing no
+   button.
+ *
+ * Separate from the button itself on purpose. The app can hide a campaign's
+ * button while keeping its destination: the photograph stays clickable and
+ * still goes where it was told to go. */
+function resolveCtaHref(block, ctx) {
   if (!isObject(block)) return null;
   var type = oneOf(text(block.cta_destination_type), CTA_TYPES, 'none');
   if (type === 'none') return null;
 
-  var label = text(block.cta_label);
-  if (!label) return null;
-
   var ref = text(block.cta_destination_ref);
-  var href = null;
 
-  if (type === 'view_all') {
-    href = '#/collection';
-  } else if (type === 'collection' && ref) {
+  if (type === 'view_all') return '#/collection';
+  if (type === 'collection' && ref) {
     var collection = ctx.collectionsById[ref];
     var slug = collection ? collectionSlug(collection.name) : '';
-    if (collection && slug) href = '#/collection/' + slug;
-  } else if (type === 'curated_edit' && ref) {
-    var edit = ctx.editsById[ref];
-    if (edit && !blank(edit.slug)) href = '#/edit/' + String(edit.slug).trim();
+    return collection && slug ? '#/collection/' + slug : null;
   }
+  if (type === 'curated_edit' && ref) {
+    var edit = ctx.editsById[ref];
+    return edit && !blank(edit.slug) ? '#/edit/' + String(edit.slug).trim() : null;
+  }
+  return null;
+}
 
+/* The button: a label and that same address. A campaign with a destination but
+   no label still has no button — unchanged from before this contract, so a
+   campaign that shows no button today does not grow one on this deploy. Its
+   destination now survives, which is the part that was being thrown away. */
+function resolveCta(block, ctx) {
+  if (!isObject(block)) return null;
+  var label = text(block.cta_label);
+  if (!label) return null;
+  var href = resolveCtaHref(block, ctx);
   return href ? { label: label, href: href } : null;
+}
+
+/* How the app framed this campaign's picture, per breakpoint.
+ *
+ * x and y are the point of the photograph to keep in view, as percentages; zoom
+ * is how far in. The floor on zoom is 1 and not lower: the frame is filled by a
+ * covering image, and scaling it below 1 about any origin would pull its edges
+ * inside the frame and show the ground behind it. Out of range is a mistake
+ * rather than an instruction, so it is clamped rather than rejected.
+ *
+ * Absence is the app's own default — the middle of the picture, unzoomed — so
+ * the site and the app's cropper describe the same framing for a campaign
+ * nobody has cropped. */
+var CROP_ZOOM_MIN = 1;
+var CROP_ZOOM_MAX = 2.5;
+
+function clampNumber(value, min, max, fallback) {
+  if (value === null || value === undefined || value === '') return fallback;
+  var n = Number(value);
+  if (!isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function publicCrop(raw) {
+  if (!isObject(raw)) return { x: 50, y: 50, zoom: 1 };
+  return {
+    x: clampNumber(raw.x, 0, 100, 50),
+    y: clampNumber(raw.y, 0, 100, 50),
+    zoom: clampNumber(raw.zoom, CROP_ZOOM_MIN, CROP_ZOOM_MAX, 1)
+  };
 }
 
 function publicCampaign(raw, ctx) {
@@ -170,7 +212,17 @@ function publicCampaign(raw, ctx) {
     /* A poster is a still for a film. It means nothing over an image. */
     media_poster_url: mediaType === 'video' ? text(raw.media_poster_url) : null,
     theme: oneOf(text(raw.theme), THEMES, 'default'),
-    cta: resolveCta(raw, ctx)
+    cta: resolveCta(raw, ctx),
+    /* Absent means yes: a campaign written before the switch existed had a
+       button, and the switch appearing must not take it away. */
+    show_cta: raw.show_cta !== false,
+    /* The destination on its own, so a hidden button still leaves the
+       photograph pointing where the app aimed it. */
+    cta_href: resolveCtaHref(raw, ctx),
+    /* Framing is a property of a picture. With none there is nothing to
+       frame, and sending a default crop would invite the page to apply one. */
+    media_crop_mobile: mediaUrl ? publicCrop(raw.media_crop_mobile) : null,
+    media_crop_desktop: mediaUrl ? publicCrop(raw.media_crop_desktop) : null
   };
 
   /* The explicit switch outranks everything. Turned off, the campaign is not a
@@ -450,3 +502,6 @@ module.exports.publicHomepage = publicHomepage;
 module.exports.resolveCta = resolveCta;
 module.exports.clampCount = clampCount;
 module.exports.publicSectionOrder = publicSectionOrder;
+module.exports.publicCampaign = publicCampaign;
+module.exports.publicCrop = publicCrop;
+module.exports.resolveCtaHref = resolveCtaHref;
