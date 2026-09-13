@@ -1213,9 +1213,46 @@ function hasArtwork(c) { return !!(c && c.media_url); }
 function campaignLabel(c, i) {
   return blank(c.heading) ? 'Campaign ' + (i + 1) : c.heading;
 }
-function campaignHref(c) { return c.cta ? c.cta.href : '#/collection'; }
+/* Where this campaign points. cta_href is the destination the app configured,
+   which outlives its button: with the button switched off the picture still
+   goes there. The button's own href is the same address, and the collection is
+   the floor when nothing resolved. */
+function campaignHref(c) {
+  if (c.cta_href) return c.cta_href;
+  return c.cta ? c.cta.href : '#/collection';
+}
 function campaignCtaLabel(c) {
   return c.cta && !blank(c.cta.label) ? c.cta.label : 'Shop Now';
+}
+/* A button at all? The app can hide one without giving up its destination, and
+   a campaign that resolved to no destination has nothing to put on a button.
+   Absent means yes — see the endpoint. */
+function campaignShowsCta(c) {
+  return c.show_cta !== false && !!c.cta;
+}
+
+/* The app's framing for this picture at this breakpoint, written as the four
+   custom properties the stylesheet reads. Both breakpoints are written at once
+   and the stylesheet picks between them, so turning a phone changes the framing
+   without the page re-rendering anything.
+ *
+ * A campaign with no crop of its own gets the app's own default — the middle of
+ * the picture, unzoomed — so the site frames it exactly as the app's cropper
+ * shows it. */
+function cropVars(c) {
+  var m = c.media_crop_mobile || { x: 50, y: 50, zoom: 1 };
+  var d = c.media_crop_desktop || { x: 50, y: 50, zoom: 1 };
+  var num = function (v, fallback) {
+    var n = Number(v);
+    return isFinite(n) ? n : fallback;
+  };
+  /* Never below 1. A covering image scaled down would pull its own edges inside
+     the frame and show the ground behind it. */
+  var zoom = function (v) { return Math.max(1, Math.min(2.5, num(v, 1))); };
+  return '--crop-mx:' + num(m.x, 50) + '%;--crop-my:' + num(m.y, 50) + '%'
+    + ';--crop-mz:' + zoom(m.zoom)
+    + ';--crop-dx:' + num(d.x, 50) + '%;--crop-dy:' + num(d.y, 50) + '%'
+    + ';--crop-dz:' + zoom(d.zoom);
 }
 
 /* One campaign's words.
@@ -1238,8 +1275,10 @@ function campaignSlideHTML(c, i) {
     + '<div class="hero-copy">'
     + '<h2 class="display">' + esc(label) + '</h2>'
     + (blank(c.subheading) ? '' : '<p class="lede">' + esc(c.subheading) + '</p>')
-    + '<a class="pill pill-dark slide-cta" href="' + esc(href) + '">'
-    + esc(campaignCtaLabel(c)) + '</a>'
+    + (campaignShowsCta(c)
+      ? '<a class="pill pill-dark slide-cta" href="' + esc(href) + '">'
+        + esc(campaignCtaLabel(c)) + '</a>'
+      : '')
     + '</div>'
     + '</div>';
 }
@@ -1272,10 +1311,13 @@ function campaignMediaSlideHTML(c, i) {
       + ' decoding="async">';
 
   return '<div class="hero-mslide" data-slide="' + i + '">'
-    + '<a class="hero-media" href="' + esc(href) + '" aria-label="' + esc(label) + '">'
+    + '<a class="hero-media" href="' + esc(href) + '" aria-label="' + esc(label) + '"'
+    + ' style="' + esc(cropVars(c)) + '">'
     + media + '</a>'
-    + '<a class="pill slide-cta slide-cta-over" href="' + esc(href) + '" tabindex="-1">'
-    + esc(campaignCtaLabel(c)) + '</a>'
+    + (campaignShowsCta(c)
+      ? '<a class="pill slide-cta slide-cta-over" href="' + esc(href) + '" tabindex="-1">'
+        + esc(campaignCtaLabel(c)) + '</a>'
+      : '')
     + '</div>';
 }
 
