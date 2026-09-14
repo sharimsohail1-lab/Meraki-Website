@@ -851,11 +851,32 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
    images differ in shape do not move the page when one follows another. */
 .hero-mslide .hero-media{position:relative;display:block;width:100%;
   min-height:clamp(420px,70vh,780px);background:var(--stone);overflow:hidden}
+/* Fill the frame without distorting, framed where the app said to frame it.
+ *
+ * The four numbers come from the campaign itself, written onto its own picture
+ * as custom properties by campaignMediaSlideHTML(). Both breakpoints' values
+ * are on the element at once and this rule picks between them, so rotating a
+ * phone re-frames the picture with no script and no re-render.
+ *
+ * transform-origin matches object-position on purpose: zooming about the same
+ * point the framing is anchored to is what keeps that point in view as the
+ * picture grows. Zoom is never below 1, so a picture that already covers the
+ * frame still covers it after scaling — there is no origin inside a rectangle
+ * from which scaling it up can pull an edge inward. The frame clips the
+ * overflow, so nothing grows past it.
+ *
+ * The fallbacks are the app's own default for an uncropped campaign. */
 .hero-mslide .hero-media img,.hero-mslide .hero-media video{
-  position:absolute;inset:0;width:100%;height:100%;
-  /* Fill the frame without distorting. The garment sits high in most of these
-     photographs, which is where the editorial hero already looked. */
-  object-fit:cover;object-position:50% 22%}
+  position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  object-position:var(--crop-mx,50%) var(--crop-my,50%);
+  transform:scale(var(--crop-mz,1));
+  transform-origin:var(--crop-mx,50%) var(--crop-my,50%)}
+@media(min-width:900px){
+  .hero-mslide .hero-media img,.hero-mslide .hero-media video{
+    object-position:var(--crop-dx,50%) var(--crop-dy,50%);
+    transform:scale(var(--crop-dz,1));
+    transform-origin:var(--crop-dx,50%) var(--crop-dy,50%)}
+}
 .hero-mslide .hero-media:focus-visible{outline:2px solid var(--plum);outline-offset:-4px}
 
 /* The brand line, written once, in the left column's flow above the sliding
