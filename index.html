@@ -328,6 +328,16 @@
       <button class="add" id="pdp-add" data-state="idle">Select a size</button>
       <p class="note" id="pdp-delivery"></p>
       <div class="specs" id="pdp-specs"></div>
+      <!-- The same note on every piece, so it is written here in the markup
+           rather than by the renderer: nothing about it is product-specific,
+           and there is nothing to rebuild when the visitor changes the
+           photograph or the size. Last in the details column, after the specs
+           and before the customer photographs below — it is part of reading the
+           piece, not a policy bolted to the bottom of the page. -->
+      <section class="pdp-note" aria-labelledby="pdp-note-title">
+        <h2 id="pdp-note-title">Please Note</h2>
+        <p>Handmade details, lace, patchwork and pattern placement may vary slightly from piece to piece. Colors may also appear differently depending on lighting and your device display. Some model imagery uses AI-assisted visualization to present the actual garment; please refer to customer photos where available for additional real-world views.</p>
+      </section>
     </div>
   </div>
   <!-- Photographs customers sent in. Written by renderCustomerPhotos(); the

@@ -301,6 +301,26 @@ h1.pname{margin:0;font:300 clamp(30px,3.6vw,46px)/1.1 var(--serif);letter-spacin
   .specs div{display:block;padding:13px 0}
   .specs .k{margin:0 0 5px}
 }
+
+/* The standing note at the foot of the details column.
+ *
+ * A rule and two lines of type, in the same weights the specification table
+ * above it already uses — so it reads as the last thing the piece has to say
+ * rather than as a policy pinned to the page. No box, no tint, no icon: this is
+ * the honest description of a handmade garment, not a warning.
+ *
+ * The negative margin takes back part of the column's 22px gap: the rule
+ * belongs to this note, and a full gap above it plus the note's own padding
+ * opened a space wider than anything else in the column. */
+.pdp-note{margin-top:-6px;padding:14px 0 2px;border-top:1px solid rgba(42,31,34,.13)}
+/* Heading, not a label: sentence case, only half a step larger than the body,
+   and the same colour — enough to be found, not enough to announce itself. */
+.pdp-note h2{margin:0 0 6px;font:400 13.5px/1.5 var(--sans);letter-spacing:.01em;color:var(--muted)}
+.pdp-note p{margin:0;font:300 12.5px/1.55 var(--sans);color:var(--muted);text-wrap:pretty}
+@media(max-width:899px){
+  .pdp-note h2{font-size:13px}
+  .pdp-note p{font-size:12px}
+}
 .also{margin-top:clamp(56px,8vw,110px);max-width:1240px;margin-left:auto;margin-right:auto}
 .also>p{margin:0 0 26px;font:300 10.5px/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:var(--soft)}
 
