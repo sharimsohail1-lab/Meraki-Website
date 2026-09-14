@@ -379,6 +379,11 @@ function imgHTML(image, sizes, attrs) {
     ' ' + (attrs || '') + '>';
 }
 
+/* The gallery strip is four across, so the first four are the row a visitor
+   sees without scrolling. Beyond that a piece with many photographs defers the
+   rest as before. */
+var THUMB_EAGER = 4;
+
 /* ---------- cards ---------- */
 var CARD_SIZES = '(max-width:640px) 92vw, (max-width:1100px) 44vw, 300px';
 
@@ -1777,7 +1782,16 @@ function renderCustomerPhotos(p) {
 
   var shots = (p && p.customerPhotos) || [];
   section.classList.toggle('hidden', shots.length === 0);
-  if (!shots.length) { grid.innerHTML = ''; return; }
+  if (!shots.length) { grid.dataset.seen = ''; grid.innerHTML = ''; return; }
+
+  /* These photographs belong to the piece. renderProduct() runs again every
+     time the visitor picks a different photograph in the gallery above, and
+     rewriting this grid then destroyed every picture in it and fetched them
+     again — so choosing a gallery photograph made the customer photographs
+     blink too. Rebuilt only when the photographs themselves change. */
+  var key = shots.map(function (img) { return img.src; }).join('|');
+  if (grid.dataset.seen === key) return;
+  grid.dataset.seen = key;
 
   grid.innerHTML = shots.map(function (img, i) {
     return '<button class="seen-shot" type="button" data-seen="' + i + '"'
@@ -1857,12 +1871,39 @@ function renderProduct() {
      strip would otherwise leave under the main image. */
   var thumbs = byId('pdp-thumbs');
   thumbs.classList.toggle('hidden', shots.length < 2);
-  thumbs.innerHTML = shots.length < 2 ? '' : shots.map(function (s, i) {
-    return '<button data-shot="' + i + '" aria-pressed="' + (state.shot === i) + '" aria-label="View ' + (i + 1) + '">' +
-      imgHTML(s, '(max-width:900px) 24vw, 130px',
-        'loading="lazy" decoding="async" style="object-position:' + (i === 0 ? '50% 15%' : '50% 30%') + '"') +
-      '</button>';
-  }).join('');
+
+  /* The strip belongs to the piece, not to the photograph chosen within it.
+     Rewriting innerHTML here on every render destroyed every <img> in the strip
+     and built new ones — and a new element has nothing decoded to paint, so the
+     whole row blinked out to its own ground and back each time the visitor
+     picked a different photograph, re-requesting pictures that were already
+     loaded. So the strip is rebuilt only when the photographs themselves
+     change, and choosing one is an attribute change on elements that stay put.
+
+     Keyed on the addresses rather than on the slug: it is the pictures this
+     strip is made of, so two renders showing the same pictures can share it. */
+  var stripKey = shots.length < 2 ? '' : shots.map(function (s) { return s.src; }).join('|');
+  if (thumbs.dataset.strip !== stripKey) {
+    thumbs.dataset.strip = stripKey;
+    thumbs.innerHTML = stripKey === '' ? '' : shots.map(function (s, i) {
+      /* The first row is beside the photograph it belongs to and is on screen
+         the moment the page is, so it is fetched rather than deferred; the rest
+         of a long strip stays lazy. */
+      var eager = i < THUMB_EAGER;
+      return '<button data-shot="' + i + '" aria-label="View ' + (i + 1) + '">' +
+        imgHTML(s, '(max-width:900px) 24vw, 130px',
+          (eager ? 'fetchpriority="high"' : 'loading="lazy"')
+          + ' decoding="async" style="object-position:' + (i === 0 ? '50% 15%' : '50% 30%') + '"') +
+        '</button>';
+    }).join('');
+  }
+
+  /* Which one is chosen. The only thing a click changes down here — the
+     stylesheet takes the border and the opacity from this attribute, so the
+     selection fades between two thumbnails that were never rebuilt. */
+  Array.prototype.forEach.call(thumbs.children, function (btn, i) {
+    btn.setAttribute('aria-pressed', String(state.shot === i));
+  });
 
   byId('pdp-name').textContent = p.name;
   byId('pdp-price').textContent = p.price;
@@ -1917,7 +1958,16 @@ function renderProduct() {
   /* With nothing to suggest, the heading and the See More below it would be a
      section about nothing, so the whole block goes. */
   also.classList.toggle('hidden', others.length === 0);
-  byId('pdp-related').innerHTML = others.slice(0, 4).map(function (x) { return cardHTML(x, true); }).join('');
+  /* Same reasoning as the thumbnail strip: these four pieces are a property of
+     the piece being looked at, not of the photograph chosen within it, so
+     choosing a photograph must not tear them down and fetch them again. */
+  var related = byId('pdp-related');
+  var relatedPieces = others.slice(0, 4);
+  var relatedKey = relatedPieces.map(function (x) { return x.id; }).join('|');
+  if (related.dataset.related !== relatedKey) {
+    related.dataset.related = relatedKey;
+    related.innerHTML = relatedPieces.map(function (x) { return cardHTML(x, true); }).join('');
+  }
 }
 
 /* ---------- inquiry ---------- */
