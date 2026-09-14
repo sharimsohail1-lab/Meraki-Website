@@ -45,7 +45,7 @@ var PRODUCT_COLUMNS = [
    yet is a hard 400, so these are requested optimistically and dropped on the
    one retry if the database says it has never heard of them. When the migration
    lands the field starts flowing with no change here. */
-var OPTIONAL_PRODUCT_COLUMNS = ['fulfillment_note', 'garment_details'];
+var OPTIONAL_PRODUCT_COLUMNS = ['fulfillment_note', 'garment_details', 'slug_aliases'];
 
 /* The garment specification, in the order it reads on the page, with the words
    the customer actually sees. The key is the app's; the label is ours, and the
@@ -260,6 +260,34 @@ function parseJson(value) {
 
 function blank(v) { return v === null || v === undefined || String(v).trim() === ''; }
 
+/* The addresses this piece used to answer to.
+ *
+ * A published slug is a permanent promise: it is printed in catalogues, pasted
+ * into WhatsApp, and bookmarked. When the app eventually lets a rename change
+ * the canonical slug, the slug it replaced is kept here so the old link still
+ * finds the piece.
+ *
+ * Always an array, never null. A caller that has to ask "is this field there
+ * yet?" at every use is a caller that will forget once, and the answer today is
+ * usually "no" — the column does not exist until the app's migration runs.
+ *
+ * Anything that is not a list of real strings is not alias history, so it
+ * becomes the empty list rather than being half-trusted. Values are trimmed,
+ * blanks dropped, and repeats collapsed: a duplicate would only ever make the
+ * same lookup run twice. */
+function publicSlugAliases(raw) {
+  var list = parseJson(raw);
+  if (!Array.isArray(list)) return [];
+
+  var out = [];
+  list.forEach(function (value) {
+    if (blank(value)) return;
+    var slug = String(value).trim();
+    if (out.indexOf(slug) === -1) out.push(slug);
+  });
+  return out;
+}
+
 /* Size LABELS for sizes that actually have stock. The quantities themselves are
    internal and never cross this boundary — the storefront is told which sizes
    exist, never how many. Mirrors getAvailableSizeLabels() in the admin app. */
@@ -451,6 +479,12 @@ function publicProduct(row) {
   return {
     id: row.id,
     slug: blank(row.slug) ? null : String(row.slug).trim(),
+    /* Addresses this piece used to have. They travel on the piece's own row
+       rather than in a map of their own, which is what keeps them safe: a row
+       that fails the published-and-not-archived filter never leaves the
+       database, so neither do its aliases, and an old link to a piece that has
+       been withdrawn finds nothing — exactly as it does today. */
+    slug_aliases: publicSlugAliases(row.slug_aliases),
     sku: row.sku || null,
     name: name,
     description: row.description_en || '',
@@ -554,6 +588,7 @@ module.exports = function handler(req, res) {
 
 /* Exported for tests; the handler above is the entry point Vercel calls. */
 module.exports.publicProduct = publicProduct;
+module.exports.publicSlugAliases = publicSlugAliases;
 module.exports.isStorefrontVisible = isStorefrontVisible;
 module.exports.publicImage = publicImage;
 module.exports.availableSizeLabels = availableSizeLabels;

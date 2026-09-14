@@ -240,6 +240,11 @@ function mapProduct(raw) {
   return {
     id: raw.id,
     slug: blank(raw.slug) ? raw.id : raw.slug,
+    /* Addresses this piece used to answer to, for resolving old links only —
+       never for building new ones. The endpoint already sanitises them and
+       always sends a list; the guard here is for a browser holding a cached
+       script from before the field existed. */
+    slugAliases: Array.isArray(raw.slug_aliases) ? raw.slug_aliases : [],
     sku: raw.sku || null,
     name: raw.name || '',
     description: raw.description || '',
@@ -349,9 +354,33 @@ function findProduct(id) {
 
 /* Routing is the slug — human, shareable, stable across renames. Both return
    null when unknown, including while the catalogue is still empty; callers
-   must handle that rather than assume a product came back. */
+   must handle that rather than assume a product came back.
+ *
+ * Two passes, and the order is the whole point. A piece's own slug is checked
+ * against every piece before any alias is considered, so a live address can
+ * never be shadowed by some other piece's history. If bad data ever gave one
+ * piece an alias equal to another's canonical slug, the canonical piece wins
+ * and the alias is simply unreachable — the safe way round.
+ *
+ * Aliases resolve old links; they do not confer visibility. They arrive on the
+ * product's own row, so a piece the endpoint withholds has no row here and no
+ * aliases either, and an old link to a withdrawn piece finds nothing exactly as
+ * it does today. */
 function findProductBySlug(slug) {
-  return PRODUCTS.filter(function (p) { return p.slug === slug; })[0] || null;
+  var canonical = PRODUCTS.filter(function (p) { return p.slug === slug; })[0];
+  if (canonical) return canonical;
+
+  return PRODUCTS.filter(function (p) {
+    return (p.slugAliases || []).indexOf(slug) !== -1;
+  })[0] || null;
+}
+
+/* The one place a link to a piece is written. Every card, rail and customer
+   photograph goes through here, so a change to the shape of a product address
+   is one edit rather than three — and so nothing can accidentally publish a
+   link built from an alias: this reads the canonical slug and only that. */
+function productPath(p) {
+  return '#/product/' + esc(p.slug);
 }
 
 /* Bags saved before ids and slugs were separated stored the slug under `id`.
@@ -388,7 +417,7 @@ var THUMB_EAGER = 4;
 var CARD_SIZES = '(max-width:640px) 92vw, (max-width:1100px) 44vw, 300px';
 
 function cardHTML(p, small) {
-  return '<a class="card" href="#/product/' + esc(p.slug) + '">' +
+  return '<a class="card" href="' + productPath(p) + '">' +
     '<div class="shot">' + imgHTML(p.images[0], CARD_SIZES, 'loading="lazy" decoding="async"') + '</div>' +
     '<div class="meta"><p class="name">' + esc(p.name) + '</p><p class="price">' + esc(p.price) + '</p>' +
     (small ? '' : '<p class="status"><span class="dot" style="background:' + esc(p.dot) + '"></span>' + esc(p.availabilityLabel) + '</p>') +
@@ -903,7 +932,7 @@ function railCardHTML(p, i) {
   var attrs = eager
     ? 'loading="eager" fetchpriority="high" decoding="async"'
     : 'loading="lazy" decoding="async"';
-  return '<a class="rail-card" href="#/product/' + esc(p.slug) + '">'
+  return '<a class="rail-card" href="' + productPath(p) + '">'
     + '<div class="shot is-waiting">' + imgHTML(p.images[0], RAIL_SIZES, attrs) + '</div>'
     + '<div class="meta"><p class="name">' + esc(p.name) + '</p>'
     + '<p class="price">' + esc(p.price) + '</p></div></a>';
@@ -1020,7 +1049,7 @@ function renderCustomerLooks() {
 
   track.innerHTML = looks.map(function (l, i) {
     var eager = i < RAIL_MAX_VISIBLE;
-    return '<a class="look" href="#/product/' + esc(l.product.slug) + '"'
+    return '<a class="look" href="' + productPath(l.product) + '"'
       + ' aria-label="' + esc(l.product.name) + ' — seen on a customer">'
       + '<span class="shot is-waiting">'
       + imgHTML(l.img, LOOK_SIZES, eager
