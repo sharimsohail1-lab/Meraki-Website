@@ -326,7 +326,10 @@ var SETTINGS = blankSettings();
    holding a reference to a stale array. */
 var PRODUCTS = [];
 
-var state = { filter:'all', slug:null, collection:null, edit:null, size:null, shot:0, bag:[], sent:false };
+var state = { filter:'all', slug:null, collection:null, edit:null, size:null, shot:0, bag:[], sent:false,
+  /* Where the piece on screen was opened from, and whether leaving it is a
+     step back rather than a fresh navigation. See resolveReturn(). */
+  returnTo:null, inExcursion:false };
 
 /* Is the catalogue usable yet? 'loading' | 'ready' | 'error'.
 
@@ -1830,8 +1833,55 @@ function renderCustomerPhotos(p) {
   }).join('');
 }
 
+/* The words and the address for the link back out of a piece.
+ *
+ * Whatever the visitor came from, if it still resolves. A collection that has
+ * since been retired, or an edit that has been unpublished, is not somewhere to
+ * send anyone, so it falls through to the piece's own collection — and to the
+ * whole catalogue when it has none. That last answer is the one this link
+ * always gave, which is why a piece opened from a message still behaves exactly
+ * as it did before any of this. */
+function backTarget(p) {
+  var to = state.returnTo;
+  if (!blank(to)) {
+    var hash = String(to).replace(/^#\/?/, '');
+    if (hash === '') return { href: '#/', label: 'Home' };
+    if (hash === 'collection') return { href: '#/collection', label: 'Collection' };
+    if (hash === 'ready') return { href: '#/ready', label: 'Ready Now' };
+    if (hash === 'made-to-order') return { href: '#/made-to-order', label: 'Made to Order' };
+    if (hash.indexOf('collection/') === 0) {
+      var c = findCollectionBySlug(decodeURIComponent(hash.slice(11)));
+      if (c) return { href: '#/collection/' + c.slug, label: c.name };
+    }
+    if (hash.indexOf('edit/') === 0) {
+      var e = findEditBySlug(decodeURIComponent(hash.slice(5)));
+      if (e) return { href: '#/edit/' + e.slug, label: e.title };
+    }
+  }
+
+  /* Nowhere remembered: the piece's own first collection, if it is one the
+     catalogue actually shows. */
+  var own = ((p && p.collections) || [])[0];
+  var owned = blank(own) ? null : findCollectionBySlug(collectionSlug(own));
+  if (owned) return { href: '#/collection/' + owned.slug, label: owned.name };
+
+  return { href: '#/collection', label: 'Collection' };
+}
+
+function renderBackLink(p) {
+  var link = byId('pdp-back');
+  if (!link) return;
+  var target = backTarget(p);
+  link.setAttribute('href', target.href);
+  link.textContent = '← ' + target.label;
+}
+
 function renderProduct() {
   var p = findProductBySlug(state.slug);
+
+  /* Set before the piece resolves, so a slug that is still loading — or that
+     never resolves — still offers a way back rather than a dead arrow. */
+  renderBackLink(p);
 
   /* The product may be unknown because the catalogue has not arrived yet, or
      because it genuinely is not there. Those read very differently to a
@@ -2595,6 +2645,117 @@ function show(view) {
   VIEWS.forEach(function (v) { byId('view-' + v).classList.toggle('hidden', v !== view); });
 }
 
+/* ---------------------------------------------------------------------------
+ * Where a piece was opened from.
+ *
+ * The link at the top of a piece used to be a fixed address: whatever you were
+ * looking at, it returned you to every piece. Opening something from a
+ * collection and being put back at the top of the whole catalogue loses the
+ * visitor's place, which is the one thing a back link exists to keep.
+ *
+ * history.back() alone will not do. A piece is opened from a message, a
+ * bookmark or a search as often as from the site, and then the previous entry
+ * belongs to somebody else — or does not exist. The context is therefore
+ * explicit, with a deterministic answer when there is none.
+ * ------------------------------------------------------------------------- */
+
+/* Somewhere a back link may point. A piece is deliberately not on this list:
+   following a related piece keeps the listing the visitor actually arrived
+   from, rather than stacking one piece on top of another and asking them to
+   press back three times to get out. */
+function isListingRoute(hash) {
+  return hash === '' || hash === 'collection' || hash === 'ready'
+    || hash === 'made-to-order'
+    || hash.indexOf('collection/') === 0 || hash.indexOf('edit/') === 0;
+}
+
+/* The last listing this visit passed through. Null on a page opened cold. */
+var lastListing = null;
+
+/* Written into the history entry rather than into the address.
+ *
+ * A query parameter would be visible in every address anyone copies, and the
+ * address someone shares should be the address they were looking at. An entry's
+ * own state survives a reload and travels with back and forward, so stepping
+ * back to a piece restores the place that piece was opened from rather than
+ * the most recent one.
+ *
+ * The URL is passed through unchanged: this stores state beside the address, it
+ * does not rewrite it. Nothing here fires a hashchange, so the router does not
+ * re-run and nothing is reported twice. */
+function stampHistory(patch) {
+  try {
+    var prev = (history.state && typeof history.state === 'object') ? history.state : {};
+    var next = {};
+    var changed = false;
+    Object.keys(prev).forEach(function (k) { next[k] = prev[k]; });
+    Object.keys(patch).forEach(function (k) {
+      if (next[k] !== patch[k]) { next[k] = patch[k]; changed = true; }
+    });
+    if (changed) history.replaceState(next, '', location.href);
+  } catch (e) { /* a browser that refuses state still routes perfectly well */ }
+}
+
+function onProductRoute() {
+  return location.hash.replace(/^#\/?/, '').indexOf('product/') === 0;
+}
+
+/* Looking at pieces is one excursion from the listing, and it occupies exactly
+   one history entry however many pieces are looked at.
+ *
+ * The first piece opened from a listing is pushed on top of it. Every piece
+ * followed from there — a related piece, and a related piece of that — replaces
+ * that same entry instead of pushing another. So the stack is always the
+ * listing with a single piece above it, whatever the visitor does, and leaving
+ * is one step back with nothing to count.
+ *
+ * Replacing loses the entry's stored state, which is why resolveReturn falls
+ * back to the listing this visit last passed through: the excursion re-derives
+ * its own origin on arrival and stamps it again.
+ *
+ * Not for a piece opened cold. There is no listing underneath it to collapse
+ * back to, so following a related piece from a shared link pushes as any link
+ * does and the browser's back button walks the pieces one by one. */
+function collapseIntoExcursion(href) {
+  if (!state.inExcursion || !onProductRoute()) return false;
+  location.replace(href);
+  return true;
+}
+
+/* What this piece's back link should point at, in order of authority: what this
+   history entry already decided, then where the visitor came from, then
+   nothing — and renderProduct falls back to the piece's own collection.
+ *
+ * `over` says the entry sits directly on top of that listing, which is the only
+ * claim the back link needs: one step back and the visitor is where they were,
+ * on the entry that already existed, with the scroll position the browser kept
+ * for it. */
+function resolveReturn() {
+  var s = history.state;
+  if (s && typeof s === 'object' && typeof s.from === 'string' && s.from) {
+    return { href: s.from, over: s.over === true };
+  }
+  if (lastListing) return { href: lastListing, over: true };
+  return { href: null, over: false };
+}
+
+/* Leaving a piece by its own back link.
+ *
+ * A plain link would push a second copy of the listing, leaving the piece
+ * underneath it — press back twice from the next piece and the piece the
+ * visitor had already left comes back. Stepping back consumes the excursion
+ * instead, and because the excursion is always exactly one entry this is always
+ * exactly one step: no arithmetic, no counter, and nothing that grows with the
+ * number of pieces looked at.
+ *
+ * Returns false when there is no excursion to leave — a piece opened from a
+ * message or a bookmark — and the link then navigates as any link does. */
+function leaveByBackLink() {
+  if (!state.inExcursion) return false;
+  history.back();
+  return true;
+}
+
 /* The router proper is applyRoute; route() is what everything calls, so that
    every path into a new view reports it exactly once. */
 function route() {
@@ -2612,8 +2773,18 @@ function applyRoute() {
   if (hash.indexOf('product/') === 0) {
     state.slug = decodeURIComponent(hash.slice(8));
     state.size = null; state.shot = 0;
+    var back = resolveReturn();
+    state.returnTo = back.href;
+    state.inExcursion = back.over;
+    if (back.href) stampHistory({ from: back.href, over: back.over });
     renderProduct(); show('product'); window.scrollTo(0, 0); return;
   }
+
+  /* Everything below is somewhere a piece can be returned to, so the last one
+     is remembered as it is left. Recorded here rather than per link, so it
+     holds however the visitor arrived — a menu, a card, the back button, or an
+     address typed in. */
+  if (isListingRoute(hash)) lastListing = '#/' + hash;
   /* A curated edit. Deliberately its own route rather than a collection with
      a different name: an edit may draw from several collections or from none,
      and pointing its link at a collection page would show the wrong pieces. */
@@ -2660,6 +2831,26 @@ function applyRoute() {
 /* ---------- events (delegated) ---------- */
 document.addEventListener('click', function (e) {
   if (!e.target || !e.target.closest) return;
+
+  /* The link out of a piece. It stays a real link — its address is correct, so
+     a middle click, a modified click and a crawler all behave — and a plain
+     click is intercepted only to walk back over the entries the visitor made
+     rather than push another copy of the listing on top of them. Anything the
+     walk cannot do falls through to the link itself. */
+  var back = e.target.closest('#pdp-back');
+  if (back) {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (leaveByBackLink()) e.preventDefault();
+    return;
+  }
+
+  /* A piece followed from inside an excursion replaces it rather than stacking
+     on it. The link keeps its real address, so a middle or modified click still
+     opens a new tab from the listing the visitor is really in. */
+  var piece = e.target.closest('a[href^="#/product/"]');
+  if (piece && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+    if (collapseIntoExcursion(piece.getAttribute('href'))) { e.preventDefault(); return; }
+  }
 
   var nav = e.target.closest('[data-nav]');
   if (nav) { location.hash = nav.dataset.nav; return; }
