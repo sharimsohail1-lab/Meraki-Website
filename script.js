@@ -2596,6 +2596,213 @@ function reportRouteView() {
   reportViewContent(key);
 }
 
+/* Both pixels observe the same one navigation. reportRouteView is Meta's and
+   stays exactly as it was, including its own consent and readiness checks; this
+   wrapper is what route() calls so neither platform can end up with an observer
+   of its own counting a different set of moves. */
+function reportRoute() {
+  var key = routeKey();
+  reportRouteView();
+  oaiReportRouteView(key);
+}
+
+/* ---------------------------------------------------------------------------
+ * OpenAI Ads measurement.
+ *
+ * A shell. There is no Ads account yet, so there is no pixel id, and with no
+ * pixel id nothing here loads, initialises, stores or sends anything at all —
+ * every call below returns without touching the page. Setting the one constant
+ * under this comment is the whole of turning it on.
+ *
+ * Deliberately its own small layer rather than a generic analytics abstraction
+ * over both platforms. Meta and OpenAI disagree about event names, payload
+ * shapes and money units, and a shared wrapper would have to encode both
+ * dialects anyway — so Meta above is untouched and this sits beside it.
+ * ------------------------------------------------------------------------- */
+
+/* The one thing to change when the Ads account exists. Blank is off. */
+var OPENAI_ADS_PIXEL_ID = '';
+
+var OPENAI_ADS_SDK = 'https://bzrcdn.openai.com/sdk/oaiq.min.js';
+
+function oaiConfigured() {
+  return typeof OPENAI_ADS_PIXEL_ID === 'string' && OPENAI_ADS_PIXEL_ID !== '';
+}
+
+/* Has the SDK been asked for, and has it answered. Separate flags: a request
+   that is still in flight must not be made twice, and a request that failed —
+   an ad blocker, a CSP, an outage — must not be treated as ready. */
+var oaiRequested = false;
+var oaiReady = false;
+
+/* The SDK is fetched only once the visitor has accepted, which is the same rule
+   the Meta loader follows and the same promise the privacy page makes: nothing
+   from an advertising platform is requested, and no advertising cookie can be
+   set, before someone has said yes.
+ *
+ * Consent is then stated explicitly rather than left to the pixel's own
+ * default, and stated before init, which is the order the contract asks for.
+ * Nothing is queued ahead of that: oaiMeasure refuses while consent is anything
+ * but accepted, so there is no event waiting to escape the moment init runs. */
+function oaiBoot() {
+  if (!oaiConfigured() || oaiRequested || consent !== 'accepted') return false;
+  oaiRequested = true;
+  try {
+    var el = document.createElement('script');
+    el.async = true;
+    el.src = OPENAI_ADS_SDK;
+    el.onload = function () {
+      try {
+        if (typeof window.oaiq !== 'function') return;
+        /* Consent first, then init. Re-read rather than trusting the value this
+           was called with: the script is fetched over a network and the visitor
+           may have changed their mind while it was arriving. */
+        window.oaiq('consent', consent === 'accepted');
+        window.oaiq('init', { pixelId: OPENAI_ADS_PIXEL_ID });
+        oaiReady = true;
+        /* The SDK arrives over a network, which is always after the navigation
+           that asked for it — the landing page, or the piece someone was
+           reading when they accepted. Without this that first view is simply
+           lost, because route() has already been and gone. The dedupe keys are
+           still empty here, so it is reported once and the next route() through
+           sees it as already sent. */
+        oaiReportRouteView(routeKey());
+      } catch (e) { oaiReady = false; }
+    };
+    el.onerror = function () { oaiReady = false; };
+    document.head.appendChild(el);
+  } catch (e) { oaiRequested = false; }
+  return true;
+}
+
+/* Told on every change, not only on the first yes. Accepting brings the pixel
+   in; declining afterwards says so to a pixel that is already here, and the
+   gate in oaiMeasure refuses regardless of whether the SDK heard. */
+function oaiSetConsent(accepted) {
+  if (!oaiConfigured()) return;
+  if (accepted) { oaiBoot(); }
+  if (!oaiReady || typeof window.oaiq !== 'function') return;
+  try { window.oaiq('consent', accepted === true); } catch (e) { /* nothing owed */ }
+}
+
+/* Every OpenAI event on the site goes through here, and it is the only place
+   that talks to the pixel. Returns whether the event actually went, which is
+   what the dedupe keys are set from — an event that never left should not be
+   remembered as sent. */
+function oaiMeasure(name, payload, options) {
+  if (!oaiConfigured() || consent !== 'accepted' || !oaiReady) return false;
+  try {
+    if (typeof window.oaiq !== 'function') return false;
+    if (options && options.event_id) window.oaiq('measure', name, payload, options);
+    else window.oaiq('measure', name, payload);
+    return true;
+  } catch (e) { return false; }
+}
+
+/* Money as the contract wants it: whole minor units, never a display string.
+   Rounding rather than truncating is what keeps 25.99 from arriving as 2598 —
+   the product of a float and 100 lands just under the integer as often as on
+   it. Currency is the piece's own, and every price the catalogue publishes is
+   in USD, which has two minor digits. */
+function toMinorUnits(value) {
+  if (typeof value !== 'number' || !isFinite(value)) return null;
+  return Math.round(value * 100);
+}
+
+/* One piece, as a contents entry.
+ *
+ * Identity is the app's own reference where there is one and the row's id
+ * otherwise — the same rule Meta already follows here, and for the same reason:
+ * a name is display copy that changes, and a slug is an address that a rename
+ * can retire. An old address and the current one resolve to the same piece and
+ * therefore to the same id.
+ *
+ * Price is included only when the piece actually has one. An item with no
+ * amount is honest; an item with an amount of zero is wrong. */
+function oaiContent(p, extra) {
+  var item = {
+    id: p.sku || p.id,
+    name: p.name,
+    content_type: 'product'
+  };
+  var minor = toMinorUnits(p.priceValue);
+  if (minor !== null) {
+    item.amount = minor;
+    item.currency = p.currency || 'USD';
+  }
+  if (extra) Object.keys(extra).forEach(function (k) { item[k] = extra[k]; });
+  return item;
+}
+
+/* A contents event carrying one piece, with the piece's own money repeated at
+   the top level where the contract puts the event total. */
+function oaiContentsEvent(name, p, extra, options) {
+  var item = oaiContent(p, extra);
+  var payload = { type: 'contents', contents: [item] };
+  if (typeof item.amount === 'number') {
+    payload.amount = item.amount;
+    payload.currency = item.currency;
+  }
+  return oaiMeasure(name, payload, options);
+}
+
+/* What has already been reported for the navigation the visitor is on. Kept
+   apart from Meta's keys rather than shared: the two pixels can become ready at
+   different moments — one blocked, one not, or one accepted before the other
+   had loaded — and a key set by an event that went nowhere would silently
+   swallow the next real one. */
+var lastOaiPageKey = null;
+var lastOaiContentKey = null;
+
+/* The route the visitor is on, as the pixel sees it. Deliberately the route and
+   nothing else: a page event describes a page, and what piece is on it is the
+   business of contents_viewed below. */
+function oaiReportPageView(key) {
+  if (lastOaiPageKey === key) return;
+  var sent = oaiMeasure('page_viewed', {
+    type: 'contents',
+    contents: [{ id: key, name: oaiPageName(key), content_type: 'page' }]
+  });
+  if (sent) lastOaiPageKey = key;
+}
+
+function oaiPageName(key) {
+  if (key === 'home') return 'Home';
+  if (key === 'collection') return 'Collection';
+  if (key === 'ready') return 'Ready Now';
+  if (key === 'made-to-order') return 'Made to Order';
+  if (key === 'inquiry') return 'Inquiry';
+  if (key === 'privacy') return 'Privacy';
+  if (key === 'story') return 'Our Story';
+  if (key.indexOf('product/') === 0) return 'Product';
+  if (key.indexOf('collection/') === 0) return 'Collection';
+  if (key.indexOf('edit/') === 0) return 'Edit';
+  return key;
+}
+
+function oaiReportContentsViewed(key) {
+  if (key.indexOf('product/') !== 0) { lastOaiContentKey = null; return; }
+  if (lastOaiContentKey === key) return;
+
+  /* The catalogue may not have answered yet on a direct load. The key stays
+     unset so the next route() through here still sends it. */
+  var p = findProductBySlug(state.slug);
+  if (!p) return;
+
+  if (oaiContentsEvent('contents_viewed', p)) lastOaiContentKey = key;
+}
+
+/* Called from reportRouteView, which route() already calls exactly once per
+   navigation. Nothing here listens to hashchange, history or the router on its
+   own account: a second observer would be a second chance to miscount, and the
+   one the site already has is the one that knows a re-render from a move. */
+function oaiReportRouteView(key) {
+  if (!oaiConfigured() || consent !== 'accepted') return;
+  if (!oaiReady) { oaiBoot(); return; }
+  oaiReportPageView(key);
+  oaiReportContentsViewed(key);
+}
+
 /* ---------- the consent UI ---------- */
 
 function showConsentBanner(show) {
@@ -2611,7 +2818,13 @@ function answerConsent(value) {
     /* Accepting on a product page owes them both events for where they already
        are, without making them navigate again to be counted. */
     initMetaPixel();
-    reportRouteView();
+    oaiSetConsent(true);
+    reportRoute();
+  } else {
+    /* Declining after accepting: the pixel is told, and oaiMeasure refuses from
+       here whether or not it was ever listening. Meta is untouched — whatever a
+       previous accept dispatched has left, and trackMetaEvent simply refuses. */
+    oaiSetConsent(false);
   }
   /* Declining sends nothing and unsends nothing. Whatever a previous accept
      already dispatched has left; from here trackMetaEvent simply refuses. */
@@ -2636,7 +2849,7 @@ function answerConsent(value) {
   if (link) link.addEventListener('click', function () { showConsentBanner(false); });
 
   if (consent === null) showConsentBanner(true);
-  else if (consent === 'accepted') initMetaPixel();
+  else if (consent === 'accepted') { initMetaPixel(); oaiBoot(); }
 })();
 
 var VIEWS = ['home', 'collection', 'product', 'inquiry', 'privacy', 'story'];
@@ -2760,7 +2973,7 @@ function leaveByBackLink() {
    every path into a new view reports it exactly once. */
 function route() {
   applyRoute();
-  reportRouteView();
+  reportRoute();
 }
 
 function applyRoute() {
@@ -2900,6 +3113,10 @@ document.addEventListener('click', function (e) {
     var offered = SHOW_SIZE_SELECTION && p.sizes.length > 0;
     if (offered && !state.size) return;
     state.bag.push({ id: p.id, size: offered ? state.size : null });   /* identity is the id, never the slug */
+    /* After the push, so a click that was refused above — no piece, already in
+       the bag, a size still to choose — reports nothing. One piece per add;
+       the bag holds a piece once and the guard above is what enforces it. */
+    oaiContentsEvent('items_added', p, { quantity: 1 });
     saveBag(); renderProduct(); renderBag();
   }
 });
@@ -2922,6 +3139,13 @@ var leadReported = null;
 function reportLead(id) {
   if (!id || leadReported === id) return;
   leadReported = id;
+  /* The submission id, which the server deduplicates on and which survives a
+     reload mid-retry, so it is already the durable name for this one inquiry.
+     Namespaced because the identifier belongs to an inquiry, not to an event,
+     and a later server-side event for the same inquiry must send this exact
+     string to be recognised as the same conversion. */
+  oaiMeasure('lead_created', { type: 'customer_action' },
+    { event_id: 'meraki_lead_' + id });
   /* Consent is checked inside trackMetaEvent, so a declining customer's
      inquiry still completes in exactly the same way — it is simply not
      reported. The id is marked used either way: whether Meta heard about this
