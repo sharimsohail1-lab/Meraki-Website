@@ -326,7 +326,9 @@ var SETTINGS = blankSettings();
    holding a reference to a stale array. */
 var PRODUCTS = [];
 
-var state = { filter:'all', slug:null, collection:null, edit:null, size:null, shot:0, bag:[], sent:false };
+var state = { filter:'all', slug:null, collection:null, edit:null, size:null, shot:0, bag:[], sent:false,
+  /* Where the piece on screen was opened from. See resolveReturn(). */
+  returnTo:null };
 
 /* Is the catalogue usable yet? 'loading' | 'ready' | 'error'.
 
@@ -1830,8 +1832,55 @@ function renderCustomerPhotos(p) {
   }).join('');
 }
 
+/* The words and the address for the link back out of a piece.
+ *
+ * Whatever the visitor came from, if it still resolves. A collection that has
+ * since been retired, or an edit that has been unpublished, is not somewhere to
+ * send anyone, so it falls through to the piece's own collection — and to the
+ * whole catalogue when it has none. That last answer is the one this link
+ * always gave, which is why a piece opened from a message still behaves exactly
+ * as it did before any of this. */
+function backTarget(p) {
+  var to = state.returnTo;
+  if (!blank(to)) {
+    var hash = String(to).replace(/^#\/?/, '');
+    if (hash === '') return { href: '#/', label: 'Home' };
+    if (hash === 'collection') return { href: '#/collection', label: 'Collection' };
+    if (hash === 'ready') return { href: '#/ready', label: 'Ready Now' };
+    if (hash === 'made-to-order') return { href: '#/made-to-order', label: 'Made to Order' };
+    if (hash.indexOf('collection/') === 0) {
+      var c = findCollectionBySlug(decodeURIComponent(hash.slice(11)));
+      if (c) return { href: '#/collection/' + c.slug, label: c.name };
+    }
+    if (hash.indexOf('edit/') === 0) {
+      var e = findEditBySlug(decodeURIComponent(hash.slice(5)));
+      if (e) return { href: '#/edit/' + e.slug, label: e.title };
+    }
+  }
+
+  /* Nowhere remembered: the piece's own first collection, if it is one the
+     catalogue actually shows. */
+  var own = ((p && p.collections) || [])[0];
+  var owned = blank(own) ? null : findCollectionBySlug(collectionSlug(own));
+  if (owned) return { href: '#/collection/' + owned.slug, label: owned.name };
+
+  return { href: '#/collection', label: 'Collection' };
+}
+
+function renderBackLink(p) {
+  var link = byId('pdp-back');
+  if (!link) return;
+  var target = backTarget(p);
+  link.setAttribute('href', target.href);
+  link.textContent = '← ' + target.label;
+}
+
 function renderProduct() {
   var p = findProductBySlug(state.slug);
+
+  /* Set before the piece resolves, so a slug that is still loading — or that
+     never resolves — still offers a way back rather than a dead arrow. */
+  renderBackLink(p);
 
   /* The product may be unknown because the catalogue has not arrived yet, or
      because it genuinely is not there. Those read very differently to a
@@ -2595,6 +2644,68 @@ function show(view) {
   VIEWS.forEach(function (v) { byId('view-' + v).classList.toggle('hidden', v !== view); });
 }
 
+/* ---------------------------------------------------------------------------
+ * Where a piece was opened from.
+ *
+ * The link at the top of a piece used to be a fixed address: whatever you were
+ * looking at, it returned you to every piece. Opening something from a
+ * collection and being put back at the top of the whole catalogue loses the
+ * visitor's place, which is the one thing a back link exists to keep.
+ *
+ * history.back() alone will not do. A piece is opened from a message, a
+ * bookmark or a search as often as from the site, and then the previous entry
+ * belongs to somebody else — or does not exist. The context is therefore
+ * explicit, with a deterministic answer when there is none.
+ * ------------------------------------------------------------------------- */
+
+/* Somewhere a back link may point. A piece is deliberately not on this list:
+   following a related piece keeps the listing the visitor actually arrived
+   from, rather than stacking one piece on top of another and asking them to
+   press back three times to get out. */
+function isListingRoute(hash) {
+  return hash === '' || hash === 'collection' || hash === 'ready'
+    || hash === 'made-to-order'
+    || hash.indexOf('collection/') === 0 || hash.indexOf('edit/') === 0;
+}
+
+/* The last listing this visit passed through. Null on a page opened cold. */
+var lastListing = null;
+
+/* Kept in the history entry rather than in the address.
+ *
+ * A query parameter would be visible in every address anyone copies, and the
+ * address someone shares should be the address they were looking at. An entry's
+ * own state survives a reload and travels with back and forward, so stepping
+ * back to a piece restores the place that piece was opened from rather than
+ * the most recent one.
+ *
+ * The URL is passed through unchanged: this stores state beside the address, it
+ * does not rewrite it. Nothing here fires a hashchange, so the router does not
+ * re-run and nothing is reported twice. */
+function rememberReturn(from) {
+  if (blank(from)) return;
+  try {
+    var prev = (history.state && typeof history.state === 'object') ? history.state : {};
+    if (prev.from === from) return;
+    var next = {};
+    Object.keys(prev).forEach(function (k) { next[k] = prev[k]; });
+    next.from = from;
+    history.replaceState(next, '', location.href);
+  } catch (e) { /* a browser that refuses state still routes perfectly well */ }
+}
+
+function storedReturn() {
+  var s = history.state;
+  return (s && typeof s === 'object' && typeof s.from === 'string' && s.from) ? s.from : null;
+}
+
+/* What this piece's back link should point at, in order of authority:
+   what this history entry already decided, then where the visitor came from,
+   then nothing — and renderProduct falls back to the piece's own collection. */
+function resolveReturn() {
+  return storedReturn() || lastListing || null;
+}
+
 /* The router proper is applyRoute; route() is what everything calls, so that
    every path into a new view reports it exactly once. */
 function route() {
@@ -2612,8 +2723,16 @@ function applyRoute() {
   if (hash.indexOf('product/') === 0) {
     state.slug = decodeURIComponent(hash.slice(8));
     state.size = null; state.shot = 0;
+    state.returnTo = resolveReturn();
+    rememberReturn(state.returnTo);
     renderProduct(); show('product'); window.scrollTo(0, 0); return;
   }
+
+  /* Everything below is somewhere a piece can be returned to, so the last one
+     is remembered as it is left. Recorded here rather than per link, so it
+     holds however the visitor arrived — a menu, a card, the back button, or an
+     address typed in. */
+  if (isListingRoute(hash)) lastListing = '#/' + hash;
   /* A curated edit. Deliberately its own route rather than a collection with
      a different name: an edit may draw from several collections or from none,
      and pointing its link at a collection page would show the wrong pieces. */

@@ -295,7 +295,12 @@
 
 <!-- ============ PRODUCT ============ -->
 <div class="view hidden pagepad" id="view-product" style="padding-top:clamp(20px,3vw,34px)">
-  <a class="back" href="#/collection">← Collection</a>
+  <!-- Address and words are both set by renderProduct(): this link returns
+       the visitor to where they opened the piece from, so it has to say
+       where that is. The markup keeps the whole-catalogue answer, which is
+       also the fallback, so a visitor whose script has not run yet still has
+       a way back. -->
+  <a class="back" id="pdp-back" href="#/collection">← Collection</a>
   <!-- Shown instead of the product when the catalogue is still loading, failed
        to load, or genuinely has no such piece. Uses .subtle so it matches the
        collection count line rather than introducing new styling. -->
