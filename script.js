@@ -327,9 +327,9 @@ var SETTINGS = blankSettings();
 var PRODUCTS = [];
 
 var state = { filter:'all', slug:null, collection:null, edit:null, size:null, shot:0, bag:[], sent:false,
-  /* Where the piece on screen was opened from, and how far back that is. See
-     resolveReturn(). */
-  returnTo:null, returnDepth:null };
+  /* Where the piece on screen was opened from, and whether leaving it is a
+     step back rather than a fresh navigation. See resolveReturn(). */
+  returnTo:null, inExcursion:false };
 
 /* Is the catalogue usable yet? 'loading' | 'ready' | 'error'.
 
@@ -2669,10 +2669,8 @@ function isListingRoute(hash) {
     || hash.indexOf('collection/') === 0 || hash.indexOf('edit/') === 0;
 }
 
-/* The last listing this visit passed through, and how deep in this tab's
-   history it sits. Both null on a page opened cold. */
+/* The last listing this visit passed through. Null on a page opened cold. */
 var lastListing = null;
-var lastListingDepth = null;
 
 /* Written into the history entry rather than into the address.
  *
@@ -2698,64 +2696,63 @@ function stampHistory(patch) {
   } catch (e) { /* a browser that refuses state still routes perfectly well */ }
 }
 
-/* Where the current entry sits in this tab's history.
- *
- * Every entry is numbered as it is first visited. An entry stepped back or
- * forward into already carries its own number and keeps it, so the numbers
- * describe real distances between entries — which is what lets the link out of
- * a piece walk back over the entries the visitor made rather than pushing a
- * second copy of the listing on top of them. */
-var historyDepth = 0;
+function onProductRoute() {
+  return location.hash.replace(/^#\/?/, '').indexOf('product/') === 0;
+}
 
-function syncHistoryDepth() {
-  var s = history.state;
-  if (s && typeof s === 'object' && typeof s.depth === 'number') {
-    historyDepth = s.depth;
-    return;
-  }
-  historyDepth += 1;
-  stampHistory({ depth: historyDepth });
+/* Looking at pieces is one excursion from the listing, and it occupies exactly
+   one history entry however many pieces are looked at.
+ *
+ * The first piece opened from a listing is pushed on top of it. Every piece
+ * followed from there — a related piece, and a related piece of that — replaces
+ * that same entry instead of pushing another. So the stack is always the
+ * listing with a single piece above it, whatever the visitor does, and leaving
+ * is one step back with nothing to count.
+ *
+ * Replacing loses the entry's stored state, which is why resolveReturn falls
+ * back to the listing this visit last passed through: the excursion re-derives
+ * its own origin on arrival and stamps it again.
+ *
+ * Not for a piece opened cold. There is no listing underneath it to collapse
+ * back to, so following a related piece from a shared link pushes as any link
+ * does and the browser's back button walks the pieces one by one. */
+function collapseIntoExcursion(href) {
+  if (!state.inExcursion || !onProductRoute()) return false;
+  location.replace(href);
+  return true;
 }
 
 /* What this piece's back link should point at, in order of authority: what this
    history entry already decided, then where the visitor came from, then
    nothing — and renderProduct falls back to the piece's own collection.
-   The depth travels with the address so the two can never describe different
-   entries. */
+ *
+ * `over` says the entry sits directly on top of that listing, which is the only
+ * claim the back link needs: one step back and the visitor is where they were,
+ * on the entry that already existed, with the scroll position the browser kept
+ * for it. */
 function resolveReturn() {
   var s = history.state;
   if (s && typeof s === 'object' && typeof s.from === 'string' && s.from) {
-    return { href: s.from, depth: typeof s.fromDepth === 'number' ? s.fromDepth : null };
+    return { href: s.from, over: s.over === true };
   }
-  if (lastListing) return { href: lastListing, depth: lastListingDepth };
-  return { href: null, depth: null };
+  if (lastListing) return { href: lastListing, over: true };
+  return { href: null, over: false };
 }
 
 /* Leaving a piece by its own back link.
  *
- * A plain link would push another copy of the listing, so the entries for the
- * pieces the visitor opened stay underneath it — press back twice from the next
- * piece and one of them comes back, after the visitor had already left it. The
- * entries are walked back over instead, which puts the tab exactly where it was
- * when the listing was last on screen: same entry, same scroll, and the pieces
- * are dropped the moment anything new is opened.
+ * A plain link would push a second copy of the listing, leaving the piece
+ * underneath it — press back twice from the next piece and the piece the
+ * visitor had already left comes back. Stepping back consumes the excursion
+ * instead, and because the excursion is always exactly one entry this is always
+ * exactly one step: no arithmetic, no counter, and nothing that grows with the
+ * number of pieces looked at.
  *
- * Returns false when there is nothing to walk back over — a piece opened from a
+ * Returns false when there is no excursion to leave — a piece opened from a
  * message or a bookmark — and the link then navigates as any link does. */
-function leaveByBackLink(target) {
-  if (blank(target) || typeof state.returnDepth !== 'number') return false;
-  var steps = historyDepth - state.returnDepth;
-  if (!(steps > 0)) return false;
-
-  var want = String(target).replace(/^#\/?/, '');
-  history.go(-steps);
-
-  /* A browser trims old entries, and a restored tab may have none of this.
-     history.go past the end of the stack does nothing at all and reports
-     nothing, so the arrival is checked rather than assumed. */
-  setTimeout(function () {
-    if (location.hash.replace(/^#\/?/, '') !== want) location.hash = target;
-  }, 300);
+function leaveByBackLink() {
+  if (!state.inExcursion) return false;
+  history.back();
   return true;
 }
 
@@ -2769,10 +2766,6 @@ function route() {
 function applyRoute() {
   var hash = location.hash.replace(/^#\/?/, '');
 
-  /* First, because everything below either records this entry's number or
-     measures a distance from it. */
-  syncHistoryDepth();
-
   /* Leaving the inquiry page retires the thank-you screen, so the next visit
      starts a fresh inquiry rather than showing the old confirmation forever. */
   if (hash !== 'inquiry') state.sent = false;
@@ -2782,8 +2775,8 @@ function applyRoute() {
     state.size = null; state.shot = 0;
     var back = resolveReturn();
     state.returnTo = back.href;
-    state.returnDepth = back.depth;
-    if (back.href) stampHistory({ from: back.href, fromDepth: back.depth });
+    state.inExcursion = back.over;
+    if (back.href) stampHistory({ from: back.href, over: back.over });
     renderProduct(); show('product'); window.scrollTo(0, 0); return;
   }
 
@@ -2791,10 +2784,7 @@ function applyRoute() {
      is remembered as it is left. Recorded here rather than per link, so it
      holds however the visitor arrived — a menu, a card, the back button, or an
      address typed in. */
-  if (isListingRoute(hash)) {
-    lastListing = '#/' + hash;
-    lastListingDepth = historyDepth;
-  }
+  if (isListingRoute(hash)) lastListing = '#/' + hash;
   /* A curated edit. Deliberately its own route rather than a collection with
      a different name: an edit may draw from several collections or from none,
      and pointing its link at a collection page would show the wrong pieces. */
@@ -2850,8 +2840,16 @@ document.addEventListener('click', function (e) {
   var back = e.target.closest('#pdp-back');
   if (back) {
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    if (leaveByBackLink(back.getAttribute('href'))) e.preventDefault();
+    if (leaveByBackLink()) e.preventDefault();
     return;
+  }
+
+  /* A piece followed from inside an excursion replaces it rather than stacking
+     on it. The link keeps its real address, so a middle or modified click still
+     opens a new tab from the listing the visitor is really in. */
+  var piece = e.target.closest('a[href^="#/product/"]');
+  if (piece && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+    if (collapseIntoExcursion(piece.getAttribute('href'))) { e.preventDefault(); return; }
   }
 
   var nav = e.target.closest('[data-nav]');
