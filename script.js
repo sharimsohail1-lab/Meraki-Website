@@ -2620,10 +2620,23 @@ function reportRoute() {
  * dialects anyway — so Meta above is untouched and this sits beside it.
  * ------------------------------------------------------------------------- */
 
-/* The one thing to change when the Ads account exists. Blank is off. */
-var OPENAI_ADS_PIXEL_ID = '';
+/* The account's pixel. Blank is off, and it was blank until the account
+   existed; nothing below runs without it. */
+var OPENAI_ADS_PIXEL_ID = 'L9eYq3LkDgb32AseysRHU6';
 
 var OPENAI_ADS_SDK = 'https://bzrcdn.openai.com/sdk/oaiq.min.js';
+
+/* The pixel's own debug mode, which echoes what it is about to send. Useful
+   while checking a preview against OpenAI's event stream, and not something to
+   leave running for customers — so it is on everywhere except the live domain
+   rather than behind a setting nobody would remember to turn off.
+
+   The live host is the one named in this page's canonical link. A preview
+   deployment, a local server and anything else answer to a different name and
+   get debug; production does not. */
+function oaiDebug() {
+  return !/(^|\.)merakibysaima\.com$/i.test(location.hostname);
+}
 
 function oaiConfigured() {
   return typeof OPENAI_ADS_PIXEL_ID === 'string' && OPENAI_ADS_PIXEL_ID !== '';
@@ -2658,7 +2671,9 @@ function oaiBoot() {
            was called with: the script is fetched over a network and the visitor
            may have changed their mind while it was arriving. */
         window.oaiq('consent', consent === 'accepted');
-        window.oaiq('init', { pixelId: OPENAI_ADS_PIXEL_ID });
+        var init = { pixelId: OPENAI_ADS_PIXEL_ID };
+        if (oaiDebug()) init.debug = true;
+        window.oaiq('init', init);
         oaiReady = true;
         /* The SDK arrives over a network, which is always after the navigation
            that asked for it — the landing page, or the piece someone was
