@@ -54,10 +54,26 @@ header{position:sticky;top:0;z-index:60;background:rgba(251,248,244,.9);
 .hdr nav{flex:1 1 0;display:flex;gap:18px;align-items:center;min-width:0;
   overflow-x:clip;overflow-y:visible;overflow-clip-margin:20px}
 .hdr .brand{flex:0 0 auto}
-.hdr .brand img{height:clamp(38px,5.2vw,52px);width:auto;mix-blend-mode:multiply}
-/* The wordmark reads too small against the navigation on a wide screen. Desktop
-   only — below 900px the header is already tight and the mobile size stands. */
-@media(min-width:900px){.hdr .brand img{height:clamp(52px,4.4vw,64px)}}
+/* Height, never width: the mark is much wider than it is tall, so width is the
+   loose dimension and setting it leaves the height to chance. width:auto keeps
+   the ratio, and the intrinsic size on the <img> holds the space before the
+   file arrives.
+
+   The middle term is in vw so the mark grows with the page, but it has to be a
+   vw figure that is actually reachable at these widths — the old 5.2vw was
+   worth 17-22px on a phone, so every phone from 320 to 430 sat on the floor and
+   the clamp was a constant in disguise. 16vw is live across the whole phone
+   range and reaches the ceiling on the largest of them. */
+.hdr .brand img{height:clamp(58px,16vw,66px);width:auto;mix-blend-mode:multiply}
+/* Desktop is the tighter of the two: the wordmark shares its row with the
+   navigation and the Inquiry control, where a phone gives it the row to itself.
+   So it is a little smaller here, and the row it sits in is the one that has to
+   stay quiet. */
+@media(min-width:900px){.hdr .brand img{height:clamp(56px,4.6vw,64px)}}
+/* A larger mark makes the row taller, and a sticky header costs the most on the
+   screen with the least of it. Trimming the padding gives some of that back
+   without touching the two-row structure. */
+@media(max-width:899px){.hdr{padding-top:10px;padding-bottom:10px}}
 .hdr .right{flex:1 1 0;display:flex;justify-content:flex-end;align-items:center;gap:18px}
 .inquiry-btn{border:1px solid rgba(42,31,34,.22);background:transparent;padding:10px 16px;border-radius:999px;
   font:400 10.5px/1 var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--ink);
