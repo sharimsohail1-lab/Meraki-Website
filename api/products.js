@@ -21,6 +21,8 @@
  * storefront sees exactly what the app's publish preview shows.
  */
 
+var sales = require('../lib/sales.js');
+
 var SUPABASE_URL = process.env.SUPABASE_URL;
 var SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -88,7 +90,10 @@ var CUSTOMER_ROLE = 'customer_photo';
    product's within it — a piece can sit in three collections internally and be
    shown in only one. `collections!inner` because a membership pointing at a
    collection that no longer exists is not a membership. */
-var COLLECTION_COLUMNS = 'product_id,show_on_website,collections!inner(name,show_on_website)';
+/* collection_id is read for sale scope, which asks a different question from
+   the navigation: which collections a piece is IN, not which of them are shown.
+   It is never projected. */
+var COLLECTION_COLUMNS = 'product_id,collection_id,show_on_website,collections!inner(name,show_on_website)';
 
 /* ---------------------------------------------------------------------------
  * Supabase REST. No SDK — one authenticated GET is all this needs, and the repo
@@ -185,14 +190,18 @@ function readPublishedProducts() {
          rather than whatever the database happened to return. */
       + '&order=' + encodeURIComponent('sort_order.asc,created_at.asc');
 
-    /* Both follow-ups go out together: neither depends on the other, so the
+    /* All three follow-ups go out together: none depends on the others, so the
        endpoint still costs one round trip's worth of waiting. */
     return Promise.all([
       supabaseSelect(imagePath),
-      readCollectionMemberships(ids)
+      readCollectionMemberships(ids),
+      sales.readSaleData(supabaseSelect, products.map(function (p) { return p.id; }))
     ]).then(function (results) {
       var images = results[0] || [];
       var memberships = results[1];
+      /* null when migration 034 has not run. saleContext answers that with an
+         empty campaign list, so every piece resolves as not on sale. */
+      var saleCtx = sales.saleContext(results[2]);
 
       var imagesByProduct = {};
       images.forEach(function (img) {
@@ -211,9 +220,15 @@ function readPublishedProducts() {
 
       return products.map(function (p) {
         p.images = imagesByProduct[p.id] || [];
-        p.collection_memberships = membershipsByProduct
-          ? (membershipsByProduct[p.id] || [])
-          : null;
+        var rows = membershipsByProduct ? (membershipsByProduct[p.id] || []) : null;
+        p.collection_memberships = membershipsByProduct ? rows : null;
+        /* Every collection this piece is in, whether or not the collection is
+           shown. Sale scope is a pricing question and visibility is a
+           navigation one; see inScope() in lib/sales.js. */
+        p.saleCollectionIds = (rows || [])
+          .map(function (m) { return m && m.collection_id; })
+          .filter(Boolean);
+        p.pricing = sales.resolvePricing(p, saleCtx);
         return p;
       });
     });
@@ -488,8 +503,22 @@ function publicProduct(row) {
     sku: row.sku || null,
     name: name,
     description: row.description_en || '',
+    /* The regular price, unchanged and still canonical. Every existing reader
+       keeps working, and a browser holding an older script sees exactly what it
+       saw before. What a customer is actually charged today is `pricing`. */
     price: typeof row.price === 'number' ? row.price : null,
     currency: 'USD',
+
+    /* Sale pricing, already decided. Scope, overrides, the winner between
+       overlapping campaigns and the rounding are all settled in lib/sales.js
+       before this leaves the server — the storefront reads these numbers and
+       computes none of them.
+
+       Present on every product, on sale or not, so no reader has to guess
+       whether an absent field means "not on sale" or "an older deployment".
+       The campaign's internal name is not here and never will be: it is Saima's
+       label, it is not identity, and nothing customer-facing may render it. */
+    pricing: row.pricing || sales.notOnSale(typeof row.price === 'number' ? row.price : null),
     collection_names: publicCollectionNames(row),
 
     availability: AVAILABILITY_VALUES.indexOf(row.website_availability) === -1
@@ -596,3 +625,4 @@ module.exports.collectionNames = collectionNames;
 module.exports.collectionSlug = collectionSlug;
 module.exports.publicCollectionNames = publicCollectionNames;
 module.exports.variantUrls = variantUrls;
+module.exports.sales = sales;

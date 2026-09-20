@@ -11,6 +11,8 @@
  * PostgREST access, and the tables deny anon outright (see sql/README.md).
  */
 
+var salesLib = require('../lib/sales.js');
+
 var SUPABASE_URL = process.env.SUPABASE_URL;
 var SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -237,6 +239,70 @@ function readProducts(ids) {
     '&id=in.(' + encodeURIComponent(list) + ')');
 }
 
+/* Which collections these pieces are in, for collection-scope campaigns. The
+   same relational source api/products.js uses, and visibility is not consulted
+   here either — the customer was shown a price, and what this has to record is
+   that price. A database without the table answers null and every piece simply
+   resolves at its regular price. */
+function readCollectionIds(ids) {
+  var list = ids.map(function (id) { return '"' + id + '"'; }).join(',');
+  return supabase('product_collections?select=product_id,collection_id'
+    + '&product_id=in.(' + encodeURIComponent(list) + ')')
+    .catch(function (err) {
+      if (!salesLib.isAbsent(err)) throw err;
+      return null;
+    });
+}
+
+/* The effective price of every piece in this inquiry, keyed by product id.
+
+   Resolved here rather than accepted from the browser for the same reason the
+   name and the sku are: a payload that arrived over the public internet is a
+   request, not a source of truth. A page left open for a week, a replayed
+   request or hand-edited JSON must not be able to write a price.
+
+   A sale that has ended between the customer opening the page and pressing send
+   therefore records today's answer, not the one they saw. That is the correct
+   reading of a server-authoritative snapshot, and the alternative — trusting
+   the number the page was holding — is exactly the thing this endpoint exists
+   to refuse. */
+function readEffectivePrices(rows) {
+  var ids = (rows || []).map(function (r) { return r && r.id; }).filter(Boolean);
+  if (!ids.length) return Promise.resolve({});
+
+  return Promise.all([
+    salesLib.readSaleData(supabase, ids),
+    readCollectionIds(ids)
+  ]).then(function (r) {
+    var ctx = salesLib.saleContext(r[0]);
+    var byProduct = {};
+    (r[1] || []).forEach(function (m) {
+      if (!m || !m.product_id) return;
+      (byProduct[String(m.product_id)] = byProduct[String(m.product_id)] || [])
+        .push(m.collection_id);
+    });
+
+    var out = {};
+    (rows || []).forEach(function (row) {
+      if (!row || !row.id) return;
+      out[String(row.id)] = salesLib.resolvePricing({
+        id: row.id,
+        price: row.price,
+        saleCollectionIds: byProduct[String(row.id)] || []
+      }, ctx);
+    });
+    return out;
+  });
+}
+
+/* The one number written to the record. A piece with no price at all still
+   snapshots null, exactly as before — an absent price is not a free piece. */
+function effectivePrice(row, prices) {
+  if (!row || row.price === null || row.price === undefined) return null;
+  var p = prices && prices[String(row.id)];
+  return (p && p.isOnSale && typeof p.salePrice === 'number') ? p.salePrice : row.price;
+}
+
 /* --------------------------------------------------------------- handler */
 
 function fail(res, status, code) {
@@ -274,6 +340,14 @@ module.exports = function handler(req, res) {
 
   return readProducts(ids)
     .then(function (rows) {
+      /* The pieces first, then what they cost today. The second read needs the
+         first's ids, so these cannot go out together. */
+      return readEffectivePrices(rows).then(function (prices) {
+        return { rows: rows, prices: prices };
+      });
+    })
+    .then(function (read) {
+      var rows = read.rows, prices = read.prices;
       var byId = {};
       (rows || []).forEach(function (r) { if (r && r.id) byId[String(r.id).toLowerCase()] = r; });
 
@@ -296,7 +370,13 @@ module.exports = function handler(req, res) {
           /* Size is an inquiry-level answer now. The column stays for the
              records written before that was true; nothing new fills it. */
           requested_size: null,
-          price_snapshot: (row.price === null || row.price === undefined) ? null : row.price,
+          /* What the customer was actually offered, which is the sale price
+             when a campaign covers this piece and the regular price otherwise.
+             Saima quotes from this record, so it has to be the number on the
+             page rather than the one in the products table. Resolved above by
+             the same resolver /api/products publishes from, so the record and
+             the storefront can never disagree. */
+          price_snapshot: effectivePrice(row, prices),
           sort_order: i
         });
       }
@@ -353,3 +433,5 @@ module.exports.PREFERRED_SIZES = PREFERRED_SIZES;
 module.exports.normalizeEmail = normalizeEmail;
 module.exports.parseSubmission = parseSubmission;
 module.exports.LIMITS = LIMITS;
+module.exports.effectivePrice = effectivePrice;
+module.exports.sales = salesLib;
