@@ -404,8 +404,19 @@ footer{border-top:1px solid rgba(42,31,34,.11);padding:clamp(44px,5vw,72px) var(
 /* align-self is load-bearing: .fcol is a flex column, so the default
    align-items:stretch was overriding width:auto and pulling the logo to the
    full column width — 417px at 54px tall, a 5x horizontal stretch. Restoring
-   flex-start lets width:auto honour the real 3:2 aspect again. */
-.fcol img{height:46px;width:auto;align-self:flex-start;mix-blend-mode:multiply;margin-left:-4px}
+   flex-start lets width:auto honour the real 3:2 aspect again.
+
+   The negative margin is an optical correction, not a layout nudge: the file
+   carries transparent margin down its left side, so the box's left edge sits
+   well left of the mark's. That margin is a fraction of the file, so it grows
+   with the image — a fixed -4px was right at 46px and would leave the mark
+   visibly indented once it is half as big again. Stating it as the arithmetic
+   keeps the painted edge where it was at any size: the mark starts 35/330 of
+   its width in, the width is 1.5x the height, and 35/330 x 1.5 is 0.159. The
+   3.3px left over is the inset the footer already had. */
+.fcol img{--logo-h:clamp(64px,5.2vw,76px);height:var(--logo-h);width:auto;
+  align-self:flex-start;mix-blend-mode:multiply;
+  margin-left:calc(3.3px - var(--logo-h) * 0.159)}
 .fcol .blurb{margin:0;max-width:26ch;font:300 12.5px/1.8 var(--sans);color:var(--soft)}
 .fcol .head{margin:0 0 4px;font:300 10px/1 var(--sans);letter-spacing:.2em;text-transform:uppercase;color:var(--soft)}
 .fcol a,.fcol .line{font:300 13px/1.7 var(--sans);color:var(--ink);margin:0}
