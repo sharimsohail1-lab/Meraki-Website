@@ -392,6 +392,30 @@ function variantUrls(raw) {
   return out;
 }
 
+/* The real pixel size of each rendition, where the app records it.
+ *
+ * The key a rendition is filed under is a name, not a measurement. A file
+ * filed as "560" was found in production to be 233px wide — so a descriptor
+ * derived from the key overstated it by a third, and the browser chose that
+ * file believing it held half as much detail again as it does. The only
+ * trustworthy width is one the app measured, so it is passed through when it
+ * is there and the storefront falls back to an estimate when it is not.
+ *
+ * Absent for every image until the app starts recording it, which is exactly
+ * today's behaviour and costs nothing. */
+function variantDimensions(raw) {
+  var stored = parseJson(raw);
+  var out = {};
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return out;
+  Object.keys(stored).forEach(function (key) {
+    var entry = stored[key];
+    if (!entry || typeof entry !== 'object') return;
+    var w = Number(entry.width), h = Number(entry.height);
+    if (w > 0 && h > 0) out[Number(key)] = { width: Math.round(w), height: Math.round(h) };
+  });
+  return out;
+}
+
 function publicImage(img, fallbackAlt) {
   /* No public URL means nothing renderable. */
   if (!img || blank(img.public_url)) return null;
@@ -415,6 +439,10 @@ function publicImage(img, fallbackAlt) {
   /* Absent rather than empty for an image uploaded before renditions existed;
      the storefront falls back to src either way. */
   if (Object.keys(variants).length) out.variants = variants;
+
+  /* Measured sizes, when the app has them. See variantDimensions. */
+  var dims = variantDimensions(img.variants);
+  if (Object.keys(dims).length) out.variant_dimensions = dims;
 
   return out;
 }

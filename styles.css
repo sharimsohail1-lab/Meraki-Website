@@ -371,11 +371,31 @@ h1.pname{margin:0;font:300 clamp(30px,3.6vw,46px)/1.1 var(--serif);letter-spacin
 /* inquiry */
 .inq{max-width:1240px;margin:0 auto}
 .inq-cols{display:flex;flex-wrap:wrap;gap:clamp(30px,4vw,72px);align-items:flex-start}
-.bag{flex:1 1 400px;display:flex;flex-direction:column}
+/* The column that holds the pieces and their summary. The basis lives here now
+   so the summary cannot become a column of its own beside the form. */
+.bagcol{flex:1 1 400px;display:flex;flex-direction:column;min-width:0}
+.bag{display:flex;flex-direction:column}
 .bagrow{display:flex;gap:20px;padding:20px 0;border-top:1px solid rgba(42,31,34,.13)}
 .bagrow .thumb{flex:0 0 92px;aspect-ratio:3/4;background:var(--stone);overflow:hidden}
 .bagrow .thumb img{width:100%;height:100%;object-fit:cover;object-position:50% 15%}
 .bagrow .info{flex:1 1 auto;display:flex;flex-direction:column;gap:6px}
+
+/* A reduced piece in the inquiry. The same vocabulary as a card — struck
+   regular, plum sale price, the percent as quiet lettering — with the saving
+   spelled out underneath, because this is the page where someone is deciding.
+   Restrained on purpose: a coupon aesthetic would be wrong for the work. */
+.bagrow .price.onsale{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px;line-height:1.5}
+.bagprice{display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:7px}
+.saved{display:block;width:100%;font-size:11.5px;letter-spacing:.04em;color:var(--sage)}
+
+/* Regular value / Inquiry value / You save. Only drawn when something is
+   reduced, so it never appears as a row of identical numbers. */
+.bagsummary{margin-top:6px;padding:18px 0 4px;border-top:1px solid rgba(42,31,34,.13);
+  display:flex;flex-direction:column;gap:8px}
+.bagsummary .sumrow{display:flex;justify-content:space-between;align-items:baseline;gap:18px;
+  font:300 12.5px/1.4 var(--sans);color:var(--muted)}
+.bagsummary .sumrow .now{color:var(--plum);font-size:14px}
+.bagsummary .sumrow.saved{color:var(--sage);width:auto;display:flex;font-size:12.5px}
 .bagrow .remove{align-self:flex-start;border:none;background:transparent;color:var(--soft);
   font:300 10px/1 var(--sans);letter-spacing:.16em;text-transform:uppercase;padding:4px}
 .bagrow .remove:hover{color:var(--plum)}

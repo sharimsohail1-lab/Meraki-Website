@@ -376,7 +376,15 @@
     <h1 class="page">Your inquiry</h1>
     <p class="subtle" id="bag-label">Nothing selected yet</p>
     <div class="inq-cols">
-      <div class="bag" id="bag-list"></div>
+      <!-- One column: the pieces, then what they come to. The summary belongs
+           under the list, not beside it, so the two share a column rather than
+           becoming two of the three the row would otherwise lay out. -->
+      <div class="bagcol">
+        <div class="bag" id="bag-list"></div>
+        <!-- Regular value / Inquiry value / You save. Written by
+             renderBagSummary() and present only when something is reduced. -->
+        <div class="bagsummary hidden" id="bag-summary"></div>
+      </div>
       <!-- novalidate on purpose: the errors below are written by script.js so
            they read in plain language, sit beside the field they belong to, and
            survive a failed submit with everything the customer typed intact. -->
