@@ -285,7 +285,10 @@ function readEffectivePrices(rows) {
     var out = {};
     (rows || []).forEach(function (row) {
       if (!row || !row.id) return;
-      out[String(row.id)] = salesLib.resolvePricing({
+      /* The internal variant, because the record has to be able to name the
+         campaign after it has been deleted. Everything it adds stays here —
+         see resolveInternalPricing in lib/sales.js. */
+      out[String(row.id)] = salesLib.resolveInternalPricing({
         id: row.id,
         price: row.price,
         saleCollectionIds: byProduct[String(row.id)] || []
@@ -301,6 +304,51 @@ function effectivePrice(row, prices) {
   if (!row || row.price === null || row.price === undefined) return null;
   var p = prices && prices[String(row.id)];
   return (p && p.isOnSale && typeof p.salePrice === 'number') ? p.salePrice : row.price;
+}
+
+/* What was true about this piece's price when the inquiry was sent.
+ *
+ * Written down rather than derived, because every input to it moves: a campaign
+ * ends, a regular price changes, another campaign starts. Six months from now
+ * the only honest source for "what did we offer" is what we recorded today.
+ *
+ * The discount is the resolver's own figure, not the difference between the two
+ * prices. Floor rounding is lossy in both directions — $3 at a configured 50%
+ * becomes $1, which reads back as 66% — so re-deriving it would eventually
+ * contradict the number the customer was actually shown.
+ *
+ * A piece that is not reduced still records its regular price and a zero
+ * discount. That is what separates a full-price inquiry taken today from one
+ * taken before any of this existed, where all four are null because nothing was
+ * ever recorded. Nothing here is ever backfilled. */
+function saleSnapshot(row, prices) {
+  var none = {
+    regular_price_snapshot: null,
+    discount_percent_snapshot: null,
+    sale_id_snapshot: null,
+    sale_name_snapshot: null
+  };
+  if (!row || row.price === null || row.price === undefined) return none;
+  var p = prices && prices[String(row.id)];
+  if (!p || typeof p.regularPrice !== 'number') return none;
+
+  if (!p.isOnSale) {
+    return {
+      regular_price_snapshot: p.regularPrice,
+      discount_percent_snapshot: 0,
+      sale_id_snapshot: null,
+      sale_name_snapshot: null
+    };
+  }
+  return {
+    regular_price_snapshot: p.regularPrice,
+    discount_percent_snapshot: p.discountPercent,
+    sale_id_snapshot: p.saleId || null,
+    /* Blank is not a name. The column stays null rather than holding '' so
+       "the campaign had no label" and "there was no campaign" do not become
+       the same row. */
+    sale_name_snapshot: blank(p.saleInternalName) ? null : String(p.saleInternalName)
+  };
 }
 
 /* --------------------------------------------------------------- handler */
@@ -379,6 +427,11 @@ module.exports = function handler(req, res) {
           price_snapshot: effectivePrice(row, prices),
           sort_order: i
         });
+        /* The four immutable facts, merged onto the item the RPC will insert.
+           Resolved above from canonical rows; nothing the browser sent can
+           reach any of them. */
+        var snap = saleSnapshot(row, prices);
+        Object.keys(snap).forEach(function (k) { items[items.length - 1][k] = snap[k]; });
       }
 
       /* One call, one transaction: the inquiry and every item, or neither. */
@@ -434,4 +487,5 @@ module.exports.normalizeEmail = normalizeEmail;
 module.exports.parseSubmission = parseSubmission;
 module.exports.LIMITS = LIMITS;
 module.exports.effectivePrice = effectivePrice;
+module.exports.saleSnapshot = saleSnapshot;
 module.exports.sales = salesLib;
