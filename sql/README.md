@@ -9,10 +9,25 @@ here rather than in the admin app.
 `001_website_inquiries.sql` — creates `inquiries`, `inquiry_items` and the
 `create_website_inquiry()` function.
 
+`002_inquiry_state_preferred_size.sql` — adds the inquiry-level state and
+preferred size, and an eight-argument overload of the function.
+
+`003_inquiry_sale_snapshot.sql` — records what a piece was offered at:
+`regular_price_snapshot`, `discount_percent_snapshot`, `sale_id_snapshot` and
+`sale_name_snapshot` on `inquiry_items`, and replaces the eight-argument
+function so it writes them.
+
+Run them in order:
+
 1. Open the Supabase dashboard for the Meraki project
 2. **SQL Editor → New query**
-3. Paste the whole of `001_website_inquiries.sql`
-4. **Run**
+3. Paste the whole of one file
+4. **Run**, then repeat for the next
+
+Each is safe to re-run, and 003 is safe to run against a live site: it adds
+nothing the current endpoint has to know about, and the function keeps the same
+signature, so there is no window in which inquiries fail. An older deployment
+calling the new function simply leaves the new columns null.
 
 It is safe to run more than once: every statement is guarded (`create table if
 not exists`, `create or replace function`, constraint adds wrapped so a repeat
