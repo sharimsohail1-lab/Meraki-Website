@@ -224,6 +224,34 @@ h2.serif{margin:0;font:300 clamp(26px,3.4vw,44px)/1.1 var(--serif);letter-spacin
 .card .meta{display:flex;flex-direction:column;gap:6px}
 .name{margin:0;font:400 17px/1.2 var(--serif);letter-spacing:.1em}
 .price{margin:0;font:300 12.5px/1 var(--sans);color:var(--muted)}
+
+/* A reduced price.
+ *
+ * The same line as any other price, with the old figure kept beside the new
+ * one rather than replaced by it — a reduction that does not show what it
+ * reduced from is just a price. The old figure is quieter and struck; the new
+ * one carries the ink, because it is the number that is owed.
+ *
+ * line-height comes back off 1 here: these three parts wrap onto two lines in a
+ * narrow card, and at 1 they would sit on top of each other.
+ */
+.price.onsale,.pprice.onsale{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;line-height:1.35}
+.was{color:var(--faint);text-decoration-thickness:1px}
+.now{color:var(--plum)}
+/* Type, not a sticker: the site's own uppercase micro-lettering in the plum it
+   uses everywhere else, on a wash of the same colour rather than a solid fill
+   that would shout across the grid. */
+.saletag{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--plum);background:rgba(110,20,54,.07);
+  border-radius:999px;padding:4px 8px;white-space:nowrap}
+
+/* The piece's own page sets the price larger, and the tag does not follow it
+   up — a 17px badge would read as a sticker rather than as a note. */
+.pprice.onsale{gap:11px}
+.pprice.onsale .saletag{font-size:10px}
+
+/* The sale page's own line, under its heading. */
+.sale-sub{margin:10px 0 0;max-width:52ch}
 .status{margin:3px 0 0;display:flex;align-items:center;gap:7px;font:300 9.5px/1.4 var(--sans);
   letter-spacing:.17em;text-transform:uppercase;color:var(--soft)}
 .dot{width:5px;height:5px;border-radius:999px;flex:0 0 auto}

@@ -52,6 +52,9 @@
       <span class="edits-nav" id="edits-nav"></span>
       <a class="navlink" href="#/ready">Ready Now</a>
       <a class="navlink" href="#/made-to-order">Made to Order</a>
+      <!-- Shown only while something is actually reduced. Hidden by default so
+           a visitor never sees it before the catalogue has answered. -->
+      <a class="navlink navlink-sale hidden" id="sale-nav" href="#/sale">Sale</a>
       <a class="navlink" href="#/story">Our Story</a>
     </nav>
     <a class="brand" href="#/"><img src="img/logo.png" alt="Meraki by Saima" width="330" height="220"></a>
@@ -79,6 +82,7 @@
     <span class="edits-nav" id="mob-edits-nav"></span>
     <a class="navlink" href="#/ready">Ready Now</a>
     <a class="navlink" href="#/made-to-order">Made to Order</a>
+    <a class="navlink navlink-sale hidden" id="mob-sale-nav" href="#/sale">Sale</a>
     <a class="navlink" href="#/story">Our Story</a>
   </nav>
   <!-- Outside the scrolling strip on purpose: .mobnav scrolls horizontally, and
@@ -278,6 +282,9 @@
   <!-- The heading carries the collection's own name on a collection route, and
        the general title everywhere else. Written by renderGrids(). -->
   <h1 class="page" id="collection-title">The Collection</h1>
+  <!-- A sale campaign's own line, on the sale page and only when exactly one
+       campaign is behind everything shown. Written by renderGrids(). -->
+  <p class="lede sale-sub hidden" id="sale-subheading"></p>
   <p class="subtle" id="collection-count"></p>
   <div class="filters" id="filters" role="group" aria-label="Filter the collection">
     <button data-filter="all" aria-pressed="true">All pieces</button>

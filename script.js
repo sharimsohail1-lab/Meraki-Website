@@ -232,10 +232,39 @@ function mapGarmentSpecs(raw) {
 
 /* The single door product data comes through. Everything downstream renders
    this shape and never touches the raw payload. */
+/* The endpoint's resolved pricing, made safe to read.
+
+   Nothing here decides anything: it normalises an absent or half-formed
+   `pricing` block — a browser holding a script from before the field existed,
+   or a deployment that predates migration 034 — down to "not on sale at the
+   regular price". Scope, overrides, precedence and rounding are the server's,
+   and this file must never reproduce them. */
+function mapPricing(raw) {
+  var price = typeof raw.price === 'number' ? raw.price : null;
+  var p = raw.pricing;
+  var onSale = !!(p && p.isOnSale === true
+    && typeof p.salePrice === 'number'
+    && typeof p.regularPrice === 'number'
+    && typeof p.discountPercent === 'number'
+    && p.discountPercent > 0);
+
+  var regular = (p && typeof p.regularPrice === 'number') ? p.regularPrice : price;
+  return {
+    regularPrice: regular,
+    effective: onSale ? p.salePrice : regular,
+    isOnSale: onSale,
+    discountPercent: onSale ? p.discountPercent : 0,
+    saleId: onSale ? (p.saleId || null) : null,
+    salePublicHeading: (p && typeof p.salePublicHeading === 'string') ? p.salePublicHeading : '',
+    salePublicSubheading: (p && typeof p.salePublicSubheading === 'string') ? p.salePublicSubheading : ''
+  };
+}
+
 function mapProduct(raw) {
   if (!raw || blank(raw.id)) return null;
   var avail = AVAILABILITY[raw.availability] || AVAILABILITY.made_to_order;
   var sizes = (raw.sizes || []).filter(isPublicSize);
+  var sp = mapPricing(raw);
 
   return {
     id: raw.id,
@@ -248,8 +277,25 @@ function mapProduct(raw) {
     sku: raw.sku || null,
     name: raw.name || '',
     description: raw.description || '',
-    price: formatPrice(raw.price, raw.currency),
-    priceValue: raw.price,
+    /* The price the customer is actually being offered — the sale price when a
+       campaign covers this piece, the regular price otherwise. Everything that
+       shows a customer a number, or reports one to an ad platform, reads this,
+       so a piece cannot be $500 on the homepage and $400 on its own page.
+
+       The regular price is kept beside it, for the struck-through line only. */
+    price: formatPrice(sp.effective, raw.currency),
+    priceValue: sp.effective,
+    regularPrice: formatPrice(sp.regularPrice, raw.currency),
+    regularPriceValue: sp.regularPrice,
+    /* Already decided by the server: scope, overrides, the winner between
+       overlapping campaigns and the rounding. The percent is displayed exactly
+       as given and never re-derived from the two prices — $497 down to $399 is
+       19%, and computing it back from the prices is how that becomes 20%. */
+    isOnSale: sp.isOnSale,
+    discountPercent: sp.discountPercent,
+    saleId: sp.saleId,
+    saleHeading: sp.salePublicHeading,
+    saleSubheading: sp.salePublicSubheading,
     currency: raw.currency || 'USD',
     collections: raw.collection_names || [],
     availability: raw.availability || 'made_to_order',
@@ -401,6 +447,35 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/* The price line, wherever a customer reads one.
+
+   Written once and used by every surface — the grid card, the rail card, the
+   piece's own page — because the failure this guards against is a piece
+   reading $500 in one place and $400 in another. A piece that is not on sale
+   produces exactly the markup it always did, so nothing changes for it.
+
+   The percent is the server's number, printed. It is not recalculated from the
+   two prices: floor rounding makes that arithmetic lossy in both directions,
+   and $497 down to $399 would come back as 20% when the campaign says 19%. */
+/* The contents only. The element around it belongs to the caller — the cards
+   emit their own <p class="price">, and the piece's own page already has one in
+   the markup, which a second <p> from here would close rather than nest. */
+function priceInnerHTML(p) {
+  if (!p || !p.isOnSale) return esc(p ? p.price : '');
+  /* The regular price first and struck, so the eye reads the reduction in the
+     order it happened. The labels are there because a screen reader announcing
+     two bare numbers gives no clue which one is owed. */
+  return '<s class="was" aria-label="Regular price ' + esc(p.regularPrice) + '">'
+    + esc(p.regularPrice) + '</s> '
+    + '<span class="now" aria-label="Sale price ' + esc(p.price) + '">' + esc(p.price) + '</span>'
+    + '<span class="saletag">' + esc(p.discountPercent) + '% OFF</span>';
+}
+
+function priceHTML(p) {
+  return '<p class="price' + (p && p.isOnSale ? ' onsale' : '') + '">'
+    + priceInnerHTML(p) + '</p>';
+}
+
 /* One image helper for every photograph on the site, local or remote. It takes
    a normalised image and emits srcset only when renditions actually exist, so
    a lone remote original still renders correctly from its src. */
@@ -422,7 +497,7 @@ var CARD_SIZES = '(max-width:640px) 92vw, (max-width:1100px) 44vw, 300px';
 function cardHTML(p, small) {
   return '<a class="card" href="' + productPath(p) + '">' +
     '<div class="shot">' + imgHTML(p.images[0], CARD_SIZES, 'loading="lazy" decoding="async"') + '</div>' +
-    '<div class="meta"><p class="name">' + esc(p.name) + '</p><p class="price">' + esc(p.price) + '</p>' +
+    '<div class="meta"><p class="name">' + esc(p.name) + '</p>' + priceHTML(p) +
     (small ? '' : '<p class="status"><span class="dot" style="background:' + esc(p.dot) + '"></span>' + esc(p.availabilityLabel) + '</p>') +
     '</div></a>';
 }
@@ -643,6 +718,21 @@ function renderEditsNav() {
   ['edits-nav', 'mob-edits-nav'].forEach(function (id) {
     var el = byId(id);
     if (el) el.innerHTML = html;
+  });
+}
+
+/* Sale is in the navigation only while something is actually reduced.
+
+   There is no setting behind it: a campaign that has ended, been deleted or
+   never started prices nothing, so nothing resolves as on sale and the link
+   simply is not there. A permanently visible Sale link leading to an empty
+   page is worse than no link, and it would be the one nobody remembers to
+   turn off. */
+function renderSaleNav() {
+  var any = catalogue.status === 'ready' && saleProducts().length > 0;
+  ['sale-nav', 'mob-sale-nav'].forEach(function (id) {
+    var el = byId(id);
+    if (el) el.classList.toggle('hidden', !any);
   });
 }
 
@@ -938,7 +1028,7 @@ function railCardHTML(p, i) {
   return '<a class="rail-card" href="' + productPath(p) + '">'
     + '<div class="shot is-waiting">' + imgHTML(p.images[0], RAIL_SIZES, attrs) + '</div>'
     + '<div class="meta"><p class="name">' + esc(p.name) + '</p>'
-    + '<p class="price">' + esc(p.price) + '</p></div></a>';
+    + priceHTML(p) + '</div></a>';
 }
 
 /* ---------------------------------------------------------------------------
@@ -1749,10 +1839,42 @@ function placeCampaignCta(c) {
   placeCampaignCta(c);
 }
 
+/* Every published piece currently reduced. Publication is decided upstream —
+   these are the pieces the endpoint already agreed to send — so being on sale
+   never drags a draft, hidden or archived piece into view. */
+function saleProducts() {
+  return PRODUCTS.filter(function (p) { return p.isOnSale; });
+}
+
+/* The sale page's heading and its optional line beneath.
+
+   One campaign behind everything shown, and it gets to speak for the page. Two
+   or more and none of them does: borrowing one campaign's words to introduce
+   another's pieces would be putting a sentence under Saima's name that she
+   wrote about something else. The generic heading carries it instead, and the
+   subheading is simply absent rather than invented.
+
+   The campaign's internal name is not consulted here or anywhere — it is a
+   label for the app's own lists, it is not unique, and it is not identity. */
+var SALE_PAGE_HEADING = 'The Sale Edit';
+
+function salePageCopy(shown) {
+  var ids = {};
+  shown.forEach(function (p) { if (p.saleId) ids[p.saleId] = p; });
+  var keys = Object.keys(ids);
+  if (keys.length !== 1) return { heading: SALE_PAGE_HEADING, subheading: '' };
+  var p = ids[keys[0]];
+  return {
+    heading: blank(p.saleHeading) ? SALE_PAGE_HEADING : p.saleHeading,
+    subheading: blank(p.saleSubheading) ? '' : p.saleSubheading
+  };
+}
+
 function renderGrids() {
   renderHero();
   renderCampaign();
   renderEditsNav();
+  renderSaleNav();
   applySectionOrder();
   renderCollectionNav();
   renderHomeSections();
@@ -1765,8 +1887,20 @@ function renderGrids() {
   var missing = catalogue.status === 'ready'
     && ((!!state.collection && !collection) || (!!state.edit && !edit));
 
+  var onSale = state.sale ? saleProducts() : null;
+  var saleCopy = onSale ? salePageCopy(onSale) : null;
+
   byId('collection-title').textContent =
-    edit ? edit.title : collection ? collection.name : 'The Collection';
+    saleCopy ? saleCopy.heading
+    : edit ? edit.title : collection ? collection.name : 'The Collection';
+  /* The campaign's own line, when exactly one campaign is behind the page.
+     Hidden entirely otherwise — an empty element would still take space. */
+  var sub = byId('sale-subheading');
+  if (sub) {
+    var subText = saleCopy ? saleCopy.subheading : '';
+    sub.textContent = subText;
+    sub.classList.toggle('hidden', blank(subText));
+  }
   byId('collection-missing').classList.toggle('hidden', !missing);
   byId('collection-grid').classList.toggle('hidden', missing);
 
@@ -1775,6 +1909,9 @@ function renderGrids() {
   /* An edit carries its own selection and its own order, so the availability
      filter does not apply to it — the pieces were chosen, not queried. */
   var shown = missing ? []
+    /* Whatever is reduced today, in the catalogue's own order. Availability is
+       not a question the sale page asks — the reduction is the selection. */
+    : onSale ? onSale
     /* Every public piece assigned to the edit, in the app's order. A piece that
        is no longer published simply is not found — the edit shortens rather
        than showing a gap, and no count caps an edit page. */
@@ -1782,7 +1919,7 @@ function renderGrids() {
     : PRODUCTS.filter(function (p) {
         return inCollection(p, collection) && matchesFilter(p, state.filter);
       });
-  byId('filters').classList.toggle('hidden', missing || !!edit);
+  byId('filters').classList.toggle('hidden', missing || !!edit || !!onSale);
   byId('collection-grid').innerHTML = shown.map(function (p) { return cardHTML(p); }).join('');
   byId('collection-count').textContent =
     missing ? ''
@@ -1985,7 +2122,13 @@ function renderProduct() {
   });
 
   byId('pdp-name').textContent = p.name;
-  byId('pdp-price').textContent = p.price;
+  /* The same line the cards print, so a piece cannot read one way in the grid
+     and another on its own page. textContent for a piece that is not on sale —
+     the markup it had before — and the shared builder when it is. */
+  var priceEl = byId('pdp-price');
+  priceEl.classList.toggle('onsale', !!p.isOnSale);
+  if (p.isOnSale) priceEl.innerHTML = priceInnerHTML(p);
+  else priceEl.textContent = p.price;
   byId('pdp-status').textContent = p.availabilityLabel;
   byId('pdp-dot').style.background = p.dot;
   byId('pdp-desc').textContent = p.description;
@@ -2893,7 +3036,7 @@ function show(view) {
    press back three times to get out. */
 function isListingRoute(hash) {
   return hash === '' || hash === 'collection' || hash === 'ready'
-    || hash === 'made-to-order'
+    || hash === 'made-to-order' || hash === 'sale'
     || hash.indexOf('collection/') === 0 || hash.indexOf('edit/') === 0;
 }
 
@@ -3013,6 +3156,9 @@ function applyRoute() {
      holds however the visitor arrived — a menu, a card, the back button, or an
      address typed in. */
   if (isListingRoute(hash)) lastListing = '#/' + hash;
+  /* Read by renderGrids below. Set here rather than in the branch, so every
+     path that reaches a listing agrees on whether this is the sale page. */
+  state.sale = hash === 'sale';
   /* A curated edit. Deliberately its own route rather than a collection with
      a different name: an edit may draw from several collections or from none,
      and pointing its link at a collection page would show the wrong pieces. */
@@ -3026,6 +3172,15 @@ function applyRoute() {
      in renderGrids(), which also handles one that no longer resolves. */
   if (hash.indexOf('collection/') === 0) {
     state.collection = decodeURIComponent(hash.slice(11));
+    state.edit = null;
+    state.filter = 'all';
+    renderGrids(); show('collection'); window.scrollTo(0, 0); return;
+  }
+  /* Every piece currently reduced, whichever campaign reduced it. One address,
+     never one per campaign: a campaign is renamed, rescheduled and deleted, and
+     a link printed in the world has to outlive all three. */
+  if (hash === 'sale') {
+    state.collection = null;
     state.edit = null;
     state.filter = 'all';
     renderGrids(); show('collection'); window.scrollTo(0, 0); return;
