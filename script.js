@@ -1014,7 +1014,37 @@ var SEEN_RAIL = { track: 'seen-track', prev: 'seen-prev', next: 'seen-next',
    fetching a lazy image, so the first two cards started late and finished
    later. Everything past the first group stays lazy — a rail of twenty pieces
    must not become twenty downloads. */
-var RAIL_SIZES = '(max-width:640px) 44vw, (max-width:1100px) 30vw, 260px';
+/* What a rail card is actually as wide as, written out so the browser can pick
+   a photograph that suits it.
+ *
+ * This is the whole of the sharpness problem and it is worth being exact about.
+ * `sizes` is a promise about layout, and the browser keeps it: it picks the
+ * smallest candidate that covers the width it was told, multiplied by the
+ * device pixel ratio. Promise less than you render and it fetches a file too
+ * small and stretches it, which is invisible at DPR 1 and soft on every retina
+ * screen.
+ *
+ * The old value ended in a flat `260px`, which stopped tracking anything above
+ * 1100px. A rail card is a quarter of the content width there, and the content
+ * width keeps growing: 274px at 1280, 310px at 1440, 364px at 1680, 424px at
+ * 1920, 584px at 2560. So the promise was 63% short on a common desktop and
+ * more than twice short on a wide one, and the browser duly chose a smaller
+ * rendition than the same photograph got in the collection grid — which is why
+ * one piece looked soft on the homepage and sharp on its own page.
+ *
+ * The grids do not have this problem because auto-fill caps a card near 300px
+ * at every width, so their flat `300px` stays true. A rail divides the content
+ * width by a fixed count instead, so its terms have to be arithmetic.
+ *
+ * Derived from .rail-track: --pad is clamp(20px,5vw,84px) either side, and the
+ * track is 2 across with a 10px gap to 640, 3 across with 14px to 1100, then 4
+ * across with 18px. Above 1680 the padding is clamped, so the last term is a
+ * different line rather than the same one continued. Each was checked against
+ * the measured width and lands within a pixel. */
+var RAIL_SIZES = '(max-width:640px) calc(45vw - 5px), '
+  + '(max-width:1100px) calc(30vw - 9.33px), '
+  + '(max-width:1680px) calc(22.5vw - 13.5px), '
+  + 'calc(25vw - 55.5px)';
 
 /* The most cards that can be on screen at once, across every breakpoint. Used
    only to decide how many to load eagerly before layout exists to measure. */
@@ -1129,7 +1159,11 @@ function customerLooks() {
   return out;
 }
 
-var LOOK_SIZES = '(max-width:640px) 44vw, (max-width:1100px) 30vw, 240px';
+/* The looks rail is the same .rail-track at the same breakpoints, so a look is
+   exactly as wide as a New Arrivals card and takes the same promise. It had the
+   same flat-value bug, one step worse at 240px, and keeping a second nearly
+   identical string here is how the two would drift apart again. */
+var LOOK_SIZES = RAIL_SIZES;
 
 function renderCustomerLooks() {
   var section = byId('home-seen');
