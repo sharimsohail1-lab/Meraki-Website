@@ -740,6 +740,113 @@ function renderEditsNav() {
   });
 }
 
+/* ---------------------------------------------------------------------------
+ * The Sale Edit.
+ *
+ * One section for however many campaigns happen to be running. It says nothing
+ * about which — no campaign name, no campaign count, no per-campaign section —
+ * because from the shop floor a sale is one thing: some of these pieces are
+ * reduced today.
+ * ------------------------------------------------------------------------- */
+
+var SALE_EDIT_HEADING = 'The Sale Edit';
+var SALE_EDIT_CTA = 'Shop Sale';
+
+/* The line above the heading, built from what is actually reduced.
+ *
+ * Only resolved percentages are consulted — the same integers the cards and the
+ * inquiry print. The campaign's configured rate is never read here: a campaign
+ * set to 30% may reduce nothing at all if every piece it covers is excluded or
+ * priced past the validity gate, and a line saying 30% OFF above pieces that
+ * are not is worse than no line.
+ *
+ * One figure and they all agree, so it is stated. Several and only the largest
+ * is safe to state, hedged — which is what "up to" is for.
+ *
+ * Returns '' when nothing trustworthy is on offer, and the line is then left
+ * out rather than filled with an invented number. */
+function saleDiscountLine(list) {
+  var percents = (list || [])
+    .map(function (p) { return p.discountPercent; })
+    /* The pricing contract is a whole integer strictly between 0 and 100.
+       Anything else — absent, fractional, zero, negative, out of range — is not
+       a discount this can speak for. */
+    .filter(function (n) {
+      return typeof n === 'number' && isFinite(n) && n % 1 === 0 && n > 0 && n < 100;
+    });
+  if (!percents.length) return '';
+
+  var max = Math.max.apply(null, percents);
+  var min = Math.min.apply(null, percents);
+  return (min === max ? max + '% OFF' : 'UP TO ' + max + '% OFF');
+}
+
+/* The app's block, made safe to read. Absent, unparseable, or written before
+   the Sale Edit existed all mean the same thing: no section. */
+function saleCampaign() {
+  var c = HOMEPAGE && HOMEPAGE.sale_campaign;
+  return (c && typeof c === 'object') ? c : null;
+}
+
+function renderSaleEdit() {
+  var section = byId('sale-edit');
+  if (!section) return;
+
+  var cfg = saleCampaign();
+  var reduced = catalogue.status === 'ready' ? saleProducts() : [];
+
+  /* Two independent switches, and both have to be on. The app decides whether
+     it wants the creative; the catalogue decides whether there is anything to
+     point at. A section advertising a sale with nothing in it would be the
+     worse failure, so the catalogue has the final say. */
+  if (!cfg || cfg.show !== true || !reduced.length) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  section.setAttribute('data-theme', cfg.theme || 'default');
+
+  var heading = blank(cfg.heading) ? SALE_EDIT_HEADING : cfg.heading;
+  byId('sale-edit-heading').textContent = heading;
+
+  var line = saleDiscountLine(reduced);
+  var pct = byId('sale-edit-percent');
+  pct.textContent = line;
+  pct.classList.toggle('hidden', !line);
+
+  /* The app's own words, or none. Nothing is written on its behalf. */
+  var sub = byId('sale-edit-sub');
+  sub.textContent = blank(cfg.subheading) ? '' : cfg.subheading;
+  sub.classList.toggle('hidden', blank(cfg.subheading));
+
+  var cta = byId('sale-edit-cta');
+  cta.textContent = blank(cfg.cta_label) ? SALE_EDIT_CTA : cfg.cta_label;
+  /* Always #/sale. There is no destination to configure and nothing to
+     resolve — see publicSaleCampaign in api/site-settings.js. */
+  cta.setAttribute('href', '#/sale');
+  cta.classList.toggle('hidden', cfg.show_cta === false);
+
+  /* The picture, framed the way a campaign's is: the same crop variables, the
+     same poster-for-a-film rule. Rebuilt only when it changes, so re-rendering
+     the homepage does not re-fetch it. */
+  var media = byId('sale-edit-media');
+  var key = (cfg.media_url || '') + '|' + (cfg.media_poster_url || '')
+    + '|' + cropVars(cfg);
+  section.classList.toggle('has-media', hasArtwork(cfg));
+  if (!hasArtwork(cfg)) {
+    if (media.dataset.key) { media.dataset.key = ''; media.innerHTML = ''; }
+    media.classList.add('hidden');
+    return;
+  }
+  media.classList.remove('hidden');
+  if (media.dataset.key === key) return;
+  media.dataset.key = key;
+  media.setAttribute('style', cropVars(cfg));
+  var src = cfg.media_type === 'video' ? cfg.media_poster_url : cfg.media_url;
+  media.innerHTML = blank(src) ? ''
+    : '<img src="' + esc(src) + '" alt="" loading="lazy" decoding="async">';
+}
+
 /* Sale is in the navigation only while something is actually reduced.
 
    There is no setting behind it: a campaign that has ended, been deleted or
@@ -868,7 +975,8 @@ function featuredEditTitle(cfg) {
    so nothing is built twice and a section that is not mentioned keeps working.
    Sections that render nothing are already hidden by their own renderers, so a
    disabled one leaves no gap here either. */
-var SECTION_NODES = { campaign: '.hero', featured_edit: '#featured', new_arrivals: '#new-arrivals' };
+var SECTION_NODES = { campaign: '.hero', sale_campaign: '#sale-edit',
+  featured_edit: '#featured', new_arrivals: '#new-arrivals' };
 
 function applySectionOrder() {
   var order = HOMEPAGE && HOMEPAGE.section_order;
@@ -1984,6 +2092,7 @@ function renderGrids() {
   renderCampaign();
   renderEditsNav();
   renderSaleNav();
+  renderSaleEdit();
   applySectionOrder();
   renderCollectionNav();
   renderHomeSections();
@@ -2034,6 +2143,10 @@ function renderGrids() {
     missing ? ''
     : catalogue.status === 'loading' ? 'Loading the collection…'
     : catalogue.status === 'error' ? 'We couldn’t load the collection. Please try again.'
+    /* A sale page with nothing on it is a real state — a link kept from a
+       campaign that has ended, or one followed a minute too late. It says so
+       plainly rather than counting to zero, and the way on is the catalogue. */
+    : (onSale && !shown.length) ? 'Nothing is reduced just now. The collection is all here.'
     : collectionCount(shown.length);
   Array.prototype.forEach.call(byId('filters').children, function (b) {
     b.setAttribute('aria-pressed', String(b.dataset.filter === state.filter));

@@ -47,14 +47,18 @@
         </button>
         <ul class="navmenu-list hidden" id="collections-list"></ul>
       </div>
+      <!-- Second, directly after Collections, and fixed there.
+           It sits ahead of the availability filters because a sale is the one
+           thing in this nav with a clock on it, and ahead of the edits because
+           the number of those varies — anchoring Sale above them is what stops
+           its position moving as Saima merchandises. When nothing is reduced it
+           is not rendered at all and the nav reads exactly as it did before. -->
+      <a class="navlink navlink-sale hidden" id="sale-nav" href="#/sale">Sale</a>
       <!-- Every public edit, named outright, at the same level as Collections.
            Written by renderEditsNav(); empty and invisible when there are none. -->
       <span class="edits-nav" id="edits-nav"></span>
       <a class="navlink" href="#/ready">Ready Now</a>
       <a class="navlink" href="#/made-to-order">Made to Order</a>
-      <!-- Shown only while something is actually reduced. Hidden by default so
-           a visitor never sees it before the catalogue has answered. -->
-      <a class="navlink navlink-sale hidden" id="sale-nav" href="#/sale">Sale</a>
       <a class="navlink" href="#/story">Our Story</a>
     </nav>
     <a class="brand" href="#/"><img src="img/logo.png" alt="Meraki by Saima" width="330" height="220"></a>
@@ -79,10 +83,10 @@
             aria-expanded="false" aria-controls="mob-collections-list">
       Collections<span class="chev" aria-hidden="true"></span>
     </button>
+    <a class="navlink navlink-sale hidden" id="mob-sale-nav" href="#/sale">Sale</a>
     <span class="edits-nav" id="mob-edits-nav"></span>
     <a class="navlink" href="#/ready">Ready Now</a>
     <a class="navlink" href="#/made-to-order">Made to Order</a>
-    <a class="navlink navlink-sale hidden" id="mob-sale-nav" href="#/sale">Sale</a>
     <a class="navlink" href="#/story">Our Story</a>
   </nav>
   <!-- Outside the scrolling strip on purpose: .mobnav scrolls horizontally, and
@@ -192,6 +196,24 @@
        drawn from six collections and lead to an edit page, not a collection
        page. The empty text nodes are so nothing Saima has changed can flash
        on screen before the configuration is read. -->
+  <!-- THE SALE EDIT. One reusable piece of creative standing for whatever
+       happens to be reduced today — not a campaign, not a slide, and never a
+       member of campaigns[]. Its destination is #/sale and nothing else, so
+       there is no destination to configure and none written here.
+
+       Hidden until renderSaleEdit() finds both an app switch turned on and at
+       least one publicly visible piece actually on sale. Empty text nodes so
+       nothing flashes before the catalogue and the settings have answered. -->
+  <section class="section sale-edit hidden" id="sale-edit">
+    <a class="sale-edit-media" id="sale-edit-media" href="#/sale" aria-hidden="true" tabindex="-1"></a>
+    <div class="sale-edit-copy">
+      <p class="eyebrow" id="sale-edit-percent"></p>
+      <h2 class="display" id="sale-edit-heading"></h2>
+      <p class="lede hidden" id="sale-edit-sub"></p>
+      <a class="pill pill-dark" id="sale-edit-cta" href="#/sale"></a>
+    </div>
+  </section>
+
   <section class="section hidden" id="featured">
     <div class="sec-head">
       <h2 class="serif" id="featured-title">The Roselle Collection</h2>

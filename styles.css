@@ -444,6 +444,43 @@ h1.pname{margin:0;font:300 clamp(30px,3.6vw,46px)/1.1 var(--serif);letter-spacin
 .thanks p{margin:0;max-width:40ch;font:300 15px/1.9 var(--sans);color:var(--muted)}
 .pill-ghost.sm{padding:15px 32px}
 
+/* ---------------------------------------------------------------- sale edit */
+/* One section standing for whatever is reduced today.
+ *
+ * Deliberately quiet for what it is. A sale in this shop is still the same
+ * clothes photographed the same way, and the site's own paper, serif and plum
+ * carry it — no red, no flashing, no coupon. What marks it out is placement and
+ * a single line of micro-type above the heading, not colour temperature.
+ *
+ * The picture sits beside the words on a wide screen and above them on a phone,
+ * which is the arrangement the rest of the homepage already uses. */
+.sale-edit{display:flex;flex-wrap:wrap;gap:clamp(26px,4vw,64px);align-items:center}
+.sale-edit-copy{flex:1 1 320px;display:flex;flex-direction:column;
+  align-items:flex-start;gap:clamp(10px,1.4vw,16px);min-width:0}
+/* The discount line. The site's existing eyebrow micro-type, in plum, so it
+   reads as a note rather than a sticker. */
+.sale-edit #sale-edit-percent{color:var(--plum);letter-spacing:.3em}
+.sale-edit .display{margin:0}
+.sale-edit .lede{margin:0;max-width:44ch}
+.sale-edit .pill{margin-top:clamp(4px,1vw,10px)}
+
+/* The photograph. Same covering frame and the same crop variables a campaign
+   uses, so the app's framing means the same thing in both places. */
+.sale-edit-media{flex:1 1 380px;display:block;position:relative;
+  aspect-ratio:4/3;overflow:hidden;background:var(--stone);min-width:0}
+.sale-edit-media img{width:100%;height:100%;object-fit:cover;
+  object-position:var(--crop-mx,50%) var(--crop-my,50%);
+  transform:scale(var(--crop-mz,1));transition:transform 1.1s cubic-bezier(.2,.7,.2,1)}
+@media(min-width:901px){
+  .sale-edit-media{aspect-ratio:3/2}
+  .sale-edit-media img{object-position:var(--crop-dx,50%) var(--crop-dy,50%);
+    transform:scale(var(--crop-dz,1))}
+}
+.sale-edit-media:hover img{transform:scale(calc(var(--crop-dz,1) * 1.03))}
+/* Without artwork the words take the section on their own rather than leaving
+   an empty frame beside them. */
+.sale-edit:not(.has-media) .sale-edit-copy{flex-basis:100%}
+
 /* footer */
 footer{border-top:1px solid rgba(42,31,34,.11);padding:clamp(44px,5vw,72px) var(--pad) 34px;
   display:flex;flex-direction:column;gap:clamp(32px,4vw,54px)}
