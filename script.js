@@ -129,7 +129,26 @@ function variantWidth(key, masterW, masterH) {
  *
  * Falls back to the generated IMG_SRCSET for the local editorial photography,
  * whose renditions really are keyed by width. */
-function srcsetFrom(variants, src, masterW, masterH) {
+/* The width to advertise for one rendition.
+ *
+ * A `w` descriptor is a claim about how many pixels a file actually holds, and
+ * the browser picks on that claim alone. Get it wrong upward and it chooses a
+ * file too small while believing it chose well — which is what was happening:
+ * a rendition filed under "560" measured 233px across, we advertised it at
+ * 312w, and a 234px card took it with what looked like a third to spare and
+ * actually had none.
+ *
+ * So a measured width wins outright. The estimate below is only for images the
+ * app has not measured yet, and it is what the keys appear to mean when read as
+ * a bounding height — good enough to order the ladder, never good enough to
+ * trust over a real number. */
+function renditionWidth(key, dims, masterW, masterH) {
+  var measured = dims && dims[key];
+  if (measured && measured.width > 0) return Math.round(measured.width);
+  return variantWidth(key, masterW, masterH);
+}
+
+function srcsetFrom(variants, src, masterW, masterH, dims) {
   if (variants) {
     var keys = Object.keys(variants)
       .map(Number)
@@ -158,7 +177,7 @@ function srcsetFrom(variants, src, masterW, masterH) {
          than derived, so if a rendition turns out to be the master under
          another name the authoritative number is the one that survives. */
       add(src, masterW > 0 ? Math.round(masterW) : null);
-      keys.forEach(function (k) { add(variants[k], variantWidth(k, masterW, masterH)); });
+      keys.forEach(function (k) { add(variants[k], renditionWidth(k, dims, masterW, masterH)); });
 
       /* Ascending by width: the browser does not care, but a human reading
          View Source does. */
@@ -186,7 +205,7 @@ function mapImages(list, fallbackAlt) {
         height: img.height || null,
         isPrimary: img.is_primary === true,
         order: typeof img.sort_order === 'number' ? img.sort_order : i,
-        srcset: srcsetFrom(img.variants, img.src, img.width, img.height)
+        srcset: srcsetFrom(img.variants, img.src, img.width, img.height, img.variant_dimensions)
       };
     })
     .filter(function (img) { return !blank(img.src); });
@@ -944,6 +963,11 @@ function railDelay(rail) {
 
 function railPlay(rail) {
   if (!rail.interval || reducedMotion()) return;
+  /* Somebody is reading this rail. Nothing moves under a pointer resting on a
+     piece, or while the keyboard is somewhere inside it. Checked here rather
+     than only at the moment the pointer arrives, because the observer and the
+     resume timer both call this and either could restart it underneath them. */
+  if (rail.held) return;
   var track = byId(rail.track);
   if (!track || track.scrollWidth - track.clientWidth <= 4) return;
   /* Reaching the rail is the moment the next group becomes worth fetching. */
@@ -978,6 +1002,40 @@ function bindRail(rail) {
     track.addEventListener(ev, function () { railDelay(rail); }, { passive: true });
   });
 
+  /* A rail that advances out from under the piece someone is looking at is
+     arguing with them. While a pointer is over it, it holds still.
+
+     Mouse and pen only. A touch does not hover: the pointerenter it sends on
+     tap would latch the rail still with no pointerleave ever coming to release
+     it, and touch is already answered by railDelay above. */
+  var hold = function () {
+    rail.held = true;
+    railStop(rail);
+  };
+  var release = function () {
+    rail.held = false;
+    /* railPlay starts the interval again rather than moving now, so letting go
+       does not snap the rail forward the instant the pointer leaves. */
+    railPlay(rail);
+  };
+  track.addEventListener('pointerenter', function (e) {
+    if (e.pointerType === 'touch') return;
+    hold();
+  });
+  track.addEventListener('pointerleave', function (e) {
+    if (e.pointerType === 'touch') return;
+    release();
+  });
+  /* Tabbing through the cards holds it too, so a keyboard visitor does not have
+     the thing they are on slide away. focusin/focusout bubble, which is what
+     makes one listener on the track enough for every card inside it. */
+  track.addEventListener('focusin', hold);
+  track.addEventListener('focusout', function (e) {
+    /* Moving between two cards inside the rail is not leaving it. */
+    if (e.relatedTarget && track.contains(e.relatedTarget)) return;
+    release();
+  });
+
   if (rail.interval) {
     /* The timer starts when the section is actually reached, not when the page
        loads — a rail that has already shuffled itself twice before anyone
@@ -999,10 +1057,10 @@ function bindRail(rail) {
 }
 
 var ARRIVALS_RAIL = { track: 'arrivals-track', prev: 'arrivals-prev', next: 'arrivals-next',
-  interval: 2000, timer: null, resume: null, bound: false, io: null, waiting: false };
+  interval: 2000, timer: null, resume: null, bound: false, io: null, waiting: false, held: false };
 var SEEN_RAIL = { track: 'seen-track', prev: 'seen-prev', next: 'seen-next',
   /* Deliberately no interval. Customer photographs are looked at, not shown. */
-  interval: 0, timer: null, resume: null, bound: false, io: null, waiting: false };
+  interval: 0, timer: null, resume: null, bound: false, io: null, waiting: false, held: false };
 
 /* A compact card for the rails. Same product contract and the same routing as
    the grid card — only the frame is smaller, because a homepage rail should
@@ -1014,7 +1072,54 @@ var SEEN_RAIL = { track: 'seen-track', prev: 'seen-prev', next: 'seen-next',
    fetching a lazy image, so the first two cards started late and finished
    later. Everything past the first group stays lazy — a rail of twenty pieces
    must not become twenty downloads. */
-var RAIL_SIZES = '(max-width:640px) 44vw, (max-width:1100px) 30vw, 260px';
+/* What a rail card is actually as wide as, written out so the browser can pick
+   a photograph that suits it.
+ *
+ * This is the whole of the sharpness problem and it is worth being exact about.
+ * `sizes` is a promise about layout, and the browser keeps it: it picks the
+ * smallest candidate that covers the width it was told, multiplied by the
+ * device pixel ratio. Promise less than you render and it fetches a file too
+ * small and stretches it, which is invisible at DPR 1 and soft on every retina
+ * screen.
+ *
+ * The old value ended in a flat `260px`, which stopped tracking anything above
+ * 1100px. A rail card is a quarter of the content width there, and the content
+ * width keeps growing: 274px at 1280, 310px at 1440, 364px at 1680, 424px at
+ * 1920, 584px at 2560. So the promise was 63% short on a common desktop and
+ * more than twice short on a wide one, and the browser duly chose a smaller
+ * rendition than the same photograph got in the collection grid — which is why
+ * one piece looked soft on the homepage and sharp on its own page.
+ *
+ * The grids do not have this problem because auto-fill caps a card near 300px
+ * at every width, so their flat `300px` stays true. A rail divides the content
+ * width by a fixed count instead, so its terms have to be arithmetic.
+ *
+ * Derived from .rail-track: --pad is clamp(20px,5vw,84px) either side, and the
+ * track is 2 across with a 10px gap to 640, 3 across with 14px to 1100, then 4
+ * across with 18px. Above 1680 the padding is clamped, so the last term is a
+ * different line rather than the same one continued. Each was checked against
+ * the measured width and lands within a pixel.
+ *
+ * A rail card is also the smallest place a garment is shown at any size, and
+ * that turns out to matter. At around 1100px the card is 234px wide, and a
+ * piece whose smallest rendition measures 233px across satisfies that exactly
+ * — so the browser takes a file that has been reduced three and a half times
+ * from the master and re-compressed, and draws it at 1:1. Nothing is stretched
+ * and it still reads soft, because embroidery does not survive that reduction.
+ * The same piece in the collection grid sits in a 315px card, clears the same
+ * rendition by three pixels, takes the next one up and looks right.
+ *
+ * So the desktop terms ask for a quarter more than the card measures. It is a
+ * deliberate quality bias, not an error: it moves a rail card off the bottom
+ * rung and onto the rendition its neighbours in the grid already get. Phones
+ * keep the honest figure — a small card on a small screen is where the smallest
+ * rendition genuinely belongs, and it is the connection least able to afford
+ * otherwise. */
+var RAIL_QUALITY_BIAS = 1.25;
+var RAIL_SIZES = '(max-width:640px) calc(45vw - 5px), '
+  + '(max-width:1100px) calc(37.5vw - 11.66px), '
+  + '(max-width:1680px) calc(28.125vw - 16.875px), '
+  + 'calc(31.25vw - 69.375px)';
 
 /* The most cards that can be on screen at once, across every breakpoint. Used
    only to decide how many to load eagerly before layout exists to measure. */
@@ -1129,7 +1234,11 @@ function customerLooks() {
   return out;
 }
 
-var LOOK_SIZES = '(max-width:640px) 44vw, (max-width:1100px) 30vw, 240px';
+/* The looks rail is the same .rail-track at the same breakpoints, so a look is
+   exactly as wide as a New Arrivals card and takes the same promise. It had the
+   same flat-value bug, one step worse at 240px, and keeping a second nearly
+   identical string here is how the two would drift apart again. */
+var LOOK_SIZES = RAIL_SIZES;
 
 function renderCustomerLooks() {
   var section = byId('home-seen');
@@ -2227,6 +2336,47 @@ function loadBag() {
 /* A saved entry whose product is not in the catalogue is still shown and still
    removable — it is never dropped on the visitor's behalf. Which message it
    carries depends on whether the catalogue has finished loading. */
+/* What the pieces in the inquiry come to.
+ *
+ * Presentation only. The number that matters is the one api/inquiries.js works
+ * out for itself when the inquiry is sent — this cannot be submitted and is not
+ * trusted if it were. It exists so the customer can see what they are asking
+ * about before they ask.
+ *
+ * A bag entry is an id and a size; the piece is looked up live in PRODUCTS on
+ * every render, so a sale that starts or ends while a tab sits open is reflected
+ * the next time the bag draws rather than remembered from when it was filled.
+ * Quantity is not a concept here — the add button refuses a piece already in the
+ * bag — so each line counts once.
+ *
+ * The percent is never derived from the two prices: it is the resolved figure,
+ * and floor rounding means $497 to $399 is 19%, which recomputing would call 20. */
+function bagTotals() {
+  var t = { regular: 0, effective: 0, saved: 0, saleItems: 0, priced: 0 };
+  state.bag.forEach(function (b) {
+    var p = findBagProduct(b.id);
+    if (!p || typeof p.priceValue !== 'number') return;
+    var regular = typeof p.regularPriceValue === 'number' ? p.regularPriceValue : p.priceValue;
+    t.priced += 1;
+    t.regular += regular;
+    t.effective += p.priceValue;
+    if (p.isOnSale) { t.saleItems += 1; t.saved += regular - p.priceValue; }
+  });
+  return t;
+}
+
+/* The price line for one piece in the bag. A piece that is not reduced prints
+   exactly what it always did. */
+function bagPriceHTML(p) {
+  if (!p.isOnSale) return esc(p.price);
+  var saved = p.regularPriceValue - p.priceValue;
+  return '<span class="bagprice">'
+    + '<s class="was">' + esc(p.regularPrice) + '</s> '
+    + '<span class="now">' + esc(p.price) + '</span>'
+    + '<span class="saletag">' + esc(p.discountPercent) + '% OFF</span></span>'
+    + '<span class="saved">You save ' + esc(formatPrice(saved, p.currency)) + '</span>';
+}
+
 function bagRowHTML(b, i) {
   var p = findBagProduct(b.id);
   var name = p ? p.name
@@ -2238,16 +2388,39 @@ function bagRowHTML(b, i) {
      from whatever is actually known rather than from a fixed template with
      holes in it. */
   var bits = [];
-  if (p && !blank(p.price)) bits.push(esc(p.price));
+  if (p && !blank(p.price)) bits.push(bagPriceHTML(p));
   if (!blank(b.size)) bits.push('Size ' + esc(b.size));
   var line = bits.join(' · ');
 
   return '<div class="bagrow"><div class="thumb">' +
     (p ? imgHTML(p.images[0], '92px', 'loading="lazy" decoding="async"') : '') + '</div>' +
     '<div class="info"><p class="name">' + esc(name) + '</p>' +
-    (line ? '<p class="price">' + line + '</p>' : '') +
+    (line ? '<p class="price' + (p && p.isOnSale ? ' onsale' : '') + '">' + line + '</p>' : '') +
     '<p class="status" style="margin-top:2px">' + esc(p ? p.availabilityLabel : '') + '</p></div>' +
     '<button class="remove" data-remove="' + i + '" aria-label="Remove ' + esc(name) + ' from your inquiry">Remove</button></div>';
+}
+
+/* The summary under the list. Absent entirely when nothing is reduced — a
+   customer with no sale pieces should not be shown a savings line reading zero,
+   or a "regular value" that is the same number twice.
+
+   "Inquiry value", not a total: nothing has been bought, nothing is owed, and
+   the words should not suggest otherwise. */
+function renderBagSummary() {
+  var el = byId('bag-summary');
+  if (!el) return;
+  var t = bagTotals();
+  if (!t.saleItems || !t.priced) { el.innerHTML = ''; el.classList.add('hidden'); return; }
+  var cur = 'USD';
+  for (var i = 0; i < state.bag.length; i++) {
+    var p = findBagProduct(state.bag[i].id);
+    if (p && p.currency) { cur = p.currency; break; }
+  }
+  el.classList.remove('hidden');
+  el.innerHTML =
+    '<div class="sumrow"><span>Regular value</span><span>' + esc(formatPrice(t.regular, cur)) + '</span></div>'
+    + '<div class="sumrow"><span>Inquiry value</span><span class="now">' + esc(formatPrice(t.effective, cur)) + '</span></div>'
+    + '<div class="sumrow saved"><span>You save</span><span>' + esc(formatPrice(t.saved, cur)) + '</span></div>';
 }
 
 function renderBag() {
@@ -2260,6 +2433,7 @@ function renderBag() {
     ? '<div class="empty"><p class="body">You haven\'t selected any looks yet.</p>' +
       '<button class="pill pill-ghost" style="padding:14px 28px" data-nav="#/collection">Browse the collection</button></div>'
     : state.bag.map(function (b, i) { return bagRowHTML(b, i); }).join('');
+  renderBagSummary();
 
   var submit = byId('inq-submit');
   submit.dataset.ready = String(n > 0);
