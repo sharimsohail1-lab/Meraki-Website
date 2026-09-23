@@ -765,6 +765,11 @@ var SALE_EDIT_CTA = 'Shop Sale';
  *
  * Returns '' when nothing trustworthy is on offer, and the line is then left
  * out rather than filled with an invented number. */
+/* How much is off, as one phrase, from a set of reduced pieces.
+ *
+ * The one place the percentage rules live. Both the Sale Edit and a collection
+ * campaign's line are built from this, so the two can never come to different
+ * conclusions about the same pieces. */
 function saleDiscountLine(list) {
   var percents = (list || [])
     .map(function (p) { return p.discountPercent; })
@@ -779,6 +784,54 @@ function saleDiscountLine(list) {
   var max = Math.max.apply(null, percents);
   var min = Math.min.apply(null, percents);
   return (min === max ? max + '% OFF' : 'UP TO ' + max + '% OFF');
+}
+
+/* The same phrase, qualified by how much of the collection it speaks for.
+ *
+ * "30% OFF" over a collection where two pieces out of ten are reduced is a
+ * promise the collection page will not keep. Where the reduction is partial the
+ * line says so, in the words a shop would use, and the customer arrives to
+ * exactly what they were told.
+ *
+ * With reduced pieces but no percentage worth printing — every resolved figure
+ * malformed — the fact is still true and only the number is missing, so it
+ * falls back to stating the fact. "SALE" rather than a fabricated rate. */
+function discountSummary(list, coverage) {
+  var phrase = saleDiscountLine(list);
+  if (coverage === 'partial') return phrase ? 'SELECT STYLES ' + phrase : 'SELECT STYLES ON SALE';
+  return phrase || 'SALE';
+}
+
+/* What a campaign that points at a collection should say about that
+ * collection's prices today, or null if it should say nothing.
+ *
+ * The collection is found the way a visitor finds it — through the address the
+ * campaign already carries — and its pieces are gathered with inCollection,
+ * the same test the collection page itself uses. So the line can only ever
+ * describe the set the visitor will actually land on. No campaign is tied to a
+ * sale, and nothing here reads a sale's own configuration: several collections
+ * under one campaign-wide sale each answer for themselves, and a piece pulled
+ * to a different rate by a more specific sale is counted at the rate it
+ * resolved to.
+ *
+ * PRODUCTS holds only what the endpoint published, so a piece that is hidden,
+ * unpublished or archived is absent from both the count and the coverage. */
+function collectionCampaignSale(c) {
+  if (!c || blank(c.cta_href)) return null;
+  var m = /^#\/collection\/(.+)$/.exec(c.cta_href);
+  if (!m) return null;                       /* an edit, view-all, or nothing */
+  if (catalogue.status !== 'ready') return null;
+
+  var collection = findCollectionBySlug(decodeURIComponent(m[1]));
+  if (!collection) return null;
+
+  var eligible = PRODUCTS.filter(function (p) { return inCollection(p, collection); });
+  if (!eligible.length) return null;
+  var reduced = eligible.filter(function (p) { return p.isOnSale; });
+  if (!reduced.length) return null;
+
+  var coverage = reduced.length === eligible.length ? 'full' : 'partial';
+  return { coverage: coverage, line: discountSummary(reduced, coverage) };
 }
 
 /* The app's block, made safe to read. Absent, unparseable, or written before
@@ -1613,11 +1666,21 @@ function cropVars(c) {
 function campaignSlideHTML(c, i) {
   var label = campaignLabel(c, i);
   var href = campaignHref(c);
+  /* Worked out once per campaign per render, here rather than in the markup
+     below, so the collection is resolved and its pieces counted a single time
+     for this slide. There are a handful of campaigns; this stays cheap. */
+  var sale = collectionCampaignSale(c);
 
   return '<div class="hero-slide' + (hasArtwork(c) ? ' has-media' : '')
     + '" data-slide="' + i + '">'
     + '<div class="hero-copy">'
     + '<h2 class="display">' + esc(label) + '</h2>'
+    /* Between the name of the campaign and its own words, which is where a
+       shop puts it: the collection first, what is happening to its prices
+       second, the reason to want it third. Real text, in the reading order a
+       screen reader follows, and written only while it is true — the stored
+       heading and subheading are never touched. */
+    + (sale ? '<p class="slide-sale">' + esc(sale.line) + '</p>' : '')
     + (blank(c.subheading) ? '' : '<p class="lede">' + esc(c.subheading) + '</p>')
     + (campaignShowsCta(c)
       ? '<a class="pill pill-dark slide-cta" href="' + esc(href) + '">'
