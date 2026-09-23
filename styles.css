@@ -974,28 +974,34 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
   padding:13px clamp(24px,5vw,84px) clamp(48px,7vw,110px)}
 .hero-slide .display{margin:0;font:300 clamp(36px,4.6vw,72px)/1.05 var(--serif);
   letter-spacing:-.01em;text-wrap:pretty}
-/* What is happening to this collection's prices, between its name and its own
- * words. Written only while it is true, and never stored.
+/* What is happening to this collection's prices, worn by its name.
  *
- * Sized between the two it sits among — well under the campaign's name, clearly
- * above its subtitle — and set in the sans at a weight and tracking that carry
- * across a photograph. The plum is the site's own accent, doing the work a
- * clearance red would do elsewhere; there is no badge, no fill and no border,
- * because the campaign's picture is the design and this is a line of type
- * within it.
+ * Inside the <h2>, so it flows after the last word: on the collection's line
+ * when there is room, wrapped with the name when there is not. That is what
+ * keeps it beside "Roselle" rather than adrift at the edge of a phone, and it
+ * is why this is an inline-block span and not a positioned element.
  *
- * ch-based min-width is deliberate: "SELECT STYLES UP TO 40% OFF" is long, and
- * allowing it to wrap to two lines reads better than shrinking it to fit. */
-.slide-sale{margin:6px 0 0;font:500 clamp(13px,1.15vw,16px)/1.35 var(--sans);
-  letter-spacing:.18em;text-transform:uppercase;color:var(--plum);
-  text-wrap:balance;max-width:26ch}
+ * Plum ground, white type. Loud enough to be seen across a photograph and
+ * quiet enough to stay a note on the heading rather than a sticker over it —
+ * a small radius, no shadow, no border, no red.
+ *
+ * Sized in em, so it is a fixed proportion of whatever the heading is at this
+ * breakpoint and never has to be re-tuned when the heading's clamp moves. The
+ * floor is a readability limit: below about 11px the tracking stops being
+ * legible at arm's length. translateY lifts it off the baseline to sit on the
+ * heading's optical centre rather than hanging from it like a footnote. */
+.sale-badge{display:inline-block;vertical-align:baseline;
+  transform:translateY(-0.18em);
+  font:600 max(11px, 0.22em)/1.25 var(--sans);
+  letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;
+  color:#fff;background:var(--plum);
+  padding:.3em .58em;border-radius:3px;
+  /* The heading is serif and loosely tracked; the badge is neither, so it
+     needs its own word-spacing to avoid reading as part of the name. */
+  margin-left:.34em}
 
 /* The subtitle belongs to the title, so it sits close under it. */
 .hero-slide .lede{margin:-8px 0 0}
-/* With a sale line between them the subtitle is no longer directly under the
-   title, so the pull-up that tucked it there would drag it into the sale line
-   instead. */
-.hero-slide .slide-sale + .lede{margin-top:8px}
 
 /* One campaign's picture, in the picture track. */
 .hero-mslide{flex:0 0 auto;min-width:0;position:relative;display:block}
@@ -1073,13 +1079,10 @@ body[data-theme="bridal"]{--plum:#5E2340;--gold:#A98A56;--ground:#FBF7F5;--sand:
      space somewhere else. */
   .hero-slide .hero-copy{gap:0;padding:0 var(--pad) clamp(13px,3.4vw,18px)}
   .hero-slide .display{font-size:clamp(32px,8.4vw,46px)}
-  /* On a phone the copy sits over the photograph in a tight column, so the
-     line tightens its tracking rather than its size — legibility over a busy
-     image comes from weight and contrast, and squeezing the letters together
-     is what keeps the longer wording to two lines instead of three. */
-  .hero-slide .slide-sale{margin:5px 0 0;font-size:clamp(12px,3.4vw,14px);
-    letter-spacing:.14em;max-width:22ch}
-  .hero-slide .slide-sale + .lede{margin-top:6px}
+  /* On a phone the heading is smaller, so the em-derived badge comes down
+     with it and only the tracking needs easing — letters squeezed at 11px over
+     a photograph stop being legible before the size does. */
+  .hero-slide .sale-badge{letter-spacing:.07em;padding:.26em .5em}
   /* Close enough under the title to read as its subtitle. The measured gap
      between the painted glyphs lands around 11px, which is the intent; the
      margin itself is smaller because the subtitle's line box carries leading

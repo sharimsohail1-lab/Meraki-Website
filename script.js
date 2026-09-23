@@ -770,36 +770,69 @@ var SALE_EDIT_CTA = 'Shop Sale';
  * The one place the percentage rules live. Both the Sale Edit and a collection
  * campaign's line are built from this, so the two can never come to different
  * conclusions about the same pieces. */
-function saleDiscountLine(list) {
-  var percents = (list || [])
+/* The rates worth speaking for. One filter, used by every wording below, so
+   what counts as a discount is decided once.
+
+   The pricing contract is a whole integer strictly between 0 and 100. Anything
+   else — absent, fractional, zero, negative, out of range — is not a discount
+   this can speak for. */
+function salePercents(list) {
+  return (list || [])
     .map(function (p) { return p.discountPercent; })
-    /* The pricing contract is a whole integer strictly between 0 and 100.
-       Anything else — absent, fractional, zero, negative, out of range — is not
-       a discount this can speak for. */
     .filter(function (n) {
       return typeof n === 'number' && isFinite(n) && n % 1 === 0 && n > 0 && n < 100;
     });
-  if (!percents.length) return '';
+}
 
+/* "30% OFF" or "UP TO 40% OFF". The Sale Edit's line, which has room to say it
+   in full. */
+function saleDiscountLine(list) {
+  var percents = salePercents(list);
+  if (!percents.length) return '';
   var max = Math.max.apply(null, percents);
   var min = Math.min.apply(null, percents);
   return (min === max ? max + '% OFF' : 'UP TO ' + max + '% OFF');
 }
 
-/* The same phrase, qualified by how much of the collection it speaks for.
+/* The badge beside a collection's name, qualified by how much of that
+ * collection it speaks for.
  *
- * "30% OFF" over a collection where two pieces out of ten are reduced is a
- * promise the collection page will not keep. Where the reduction is partial the
- * line says so, in the words a shop would use, and the customer arrives to
- * exactly what they were told.
+ * "30%" over a collection where two pieces out of ten are reduced is a promise
+ * the collection page will not keep, so where the reduction is partial the
+ * badge says SELECT. The customer arrives at exactly what they were told.
  *
- * With reduced pieces but no percentage worth printing — every resolved figure
- * malformed — the fact is still true and only the number is missing, so it
- * falls back to stating the fact. "SALE" rather than a fabricated rate. */
-function discountSummary(list, coverage) {
-  var phrase = saleDiscountLine(list);
-  if (coverage === 'partial') return phrase ? 'SELECT STYLES ' + phrase : 'SELECT STYLES ON SALE';
-  return phrase || 'SALE';
+ * Shorter than the Sale Edit's line on purpose. Sitting in plum against the
+ * collection's own name, the badge is read as a price change before a word of
+ * it is — "OFF" is the visual context restating itself, and dropping it is
+ * what lets the longest wording stay beside the heading rather than under it.
+ *
+ * With reduced pieces but no usable rate the fact is still true and only the
+ * number is missing, so it states the fact rather than inventing one. */
+function discountBadge(list, coverage) {
+  var percents = salePercents(list);
+  var partial = coverage === 'partial';
+  if (!percents.length) return partial ? 'SELECT SALE' : 'SALE';
+
+  var max = Math.max.apply(null, percents);
+  var min = Math.min.apply(null, percents);
+  var rate = (min === max ? '' : 'UP TO ') + max + '%';
+  return partial ? 'SELECT ' + rate : rate;
+}
+
+/* What a screen reader hears. The badge's own text leans on being seen — a
+   plum tag against a collection's name — and "30%" alone says nothing about
+   what the thirty per cent is of. Spelled out here so the heading announces
+   "Roselle, 30% off" rather than "Roselle 30%", and said once: an aria-label
+   replaces the element's text for assistive technology, it does not add to it. */
+function discountBadgeLabel(list, coverage) {
+  var percents = salePercents(list);
+  var partial = coverage === 'partial';
+  if (!percents.length) return partial ? 'Selected styles on sale' : 'On sale';
+
+  var max = Math.max.apply(null, percents);
+  var min = Math.min.apply(null, percents);
+  var rate = (min === max ? '' : 'up to ') + max + '% off';
+  return partial ? 'Selected styles ' + rate : rate.charAt(0).toUpperCase() + rate.slice(1);
 }
 
 /* What a campaign that points at a collection should say about that
@@ -831,7 +864,11 @@ function collectionCampaignSale(c) {
   if (!reduced.length) return null;
 
   var coverage = reduced.length === eligible.length ? 'full' : 'partial';
-  return { coverage: coverage, line: discountSummary(reduced, coverage) };
+  return {
+    coverage: coverage,
+    badge: discountBadge(reduced, coverage),
+    label: discountBadgeLabel(reduced, coverage)
+  };
 }
 
 /* The app's block, made safe to read. Absent, unparseable, or written before
@@ -1674,13 +1711,16 @@ function campaignSlideHTML(c, i) {
   return '<div class="hero-slide' + (hasArtwork(c) ? ' has-media' : '')
     + '" data-slide="' + i + '">'
     + '<div class="hero-copy">'
-    + '<h2 class="display">' + esc(label) + '</h2>'
-    /* Between the name of the campaign and its own words, which is where a
-       shop puts it: the collection first, what is happening to its prices
-       second, the reason to want it third. Real text, in the reading order a
-       screen reader follows, and written only while it is true — the stored
-       heading and subheading are never touched. */
-    + (sale ? '<p class="slide-sale">' + esc(sale.line) + '</p>' : '')
+    /* The badge sits inside the heading rather than beside it, which is what
+       makes it behave: it flows after the last word, so it stays on the
+       collection's line when there is room and wraps with the name when there
+       is not — no overlap, no shrinking, no reaching the far edge of a phone.
+       Real text, and written only while it is true; the stored heading and
+       subheading are never touched. */
+    + '<h2 class="display">' + esc(label)
+    + (sale ? ' <span class="sale-badge" aria-label="' + esc(sale.label) + '">'
+      + esc(sale.badge) + '</span>' : '')
+    + '</h2>'
     + (blank(c.subheading) ? '' : '<p class="lede">' + esc(c.subheading) + '</p>')
     + (campaignShowsCta(c)
       ? '<a class="pill pill-dark slide-cta" href="' + esc(href) + '">'
