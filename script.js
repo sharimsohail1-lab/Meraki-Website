@@ -740,6 +740,203 @@ function renderEditsNav() {
   });
 }
 
+/* ---------------------------------------------------------------------------
+ * The Sale Edit.
+ *
+ * One section for however many campaigns happen to be running. It says nothing
+ * about which — no campaign name, no campaign count, no per-campaign section —
+ * because from the shop floor a sale is one thing: some of these pieces are
+ * reduced today.
+ * ------------------------------------------------------------------------- */
+
+var SALE_EDIT_HEADING = 'The Sale Edit';
+var SALE_EDIT_CTA = 'Shop Sale';
+
+/* The line above the heading, built from what is actually reduced.
+ *
+ * Only resolved percentages are consulted — the same integers the cards and the
+ * inquiry print. The campaign's configured rate is never read here: a campaign
+ * set to 30% may reduce nothing at all if every piece it covers is excluded or
+ * priced past the validity gate, and a line saying 30% OFF above pieces that
+ * are not is worse than no line.
+ *
+ * One figure and they all agree, so it is stated. Several and only the largest
+ * is safe to state, hedged — which is what "up to" is for.
+ *
+ * Returns '' when nothing trustworthy is on offer, and the line is then left
+ * out rather than filled with an invented number. */
+/* How much is off, as one phrase, from a set of reduced pieces.
+ *
+ * The one place the percentage rules live. Both the Sale Edit and a collection
+ * campaign's line are built from this, so the two can never come to different
+ * conclusions about the same pieces. */
+/* The rates worth speaking for. One filter, used by every wording below, so
+   what counts as a discount is decided once.
+
+   The pricing contract is a whole integer strictly between 0 and 100. Anything
+   else — absent, fractional, zero, negative, out of range — is not a discount
+   this can speak for. */
+function salePercents(list) {
+  return (list || [])
+    .map(function (p) { return p.discountPercent; })
+    .filter(function (n) {
+      return typeof n === 'number' && isFinite(n) && n % 1 === 0 && n > 0 && n < 100;
+    });
+}
+
+/* "30% OFF" or "UP TO 40% OFF". The Sale Edit's line, which has room to say it
+   in full. */
+function saleDiscountLine(list) {
+  var percents = salePercents(list);
+  if (!percents.length) return '';
+  var max = Math.max.apply(null, percents);
+  var min = Math.min.apply(null, percents);
+  return (min === max ? max + '% OFF' : 'UP TO ' + max + '% OFF');
+}
+
+/* The badge beside a collection's name, qualified by how much of that
+ * collection it speaks for.
+ *
+ * "30%" over a collection where two pieces out of ten are reduced is a promise
+ * the collection page will not keep, so where the reduction is partial the
+ * badge says SELECT. The customer arrives at exactly what they were told.
+ *
+ * Shorter than the Sale Edit's line on purpose. Sitting in plum against the
+ * collection's own name, the badge is read as a price change before a word of
+ * it is — "OFF" is the visual context restating itself, and dropping it is
+ * what lets the longest wording stay beside the heading rather than under it.
+ *
+ * With reduced pieces but no usable rate the fact is still true and only the
+ * number is missing, so it states the fact rather than inventing one. */
+function discountBadge(list, coverage) {
+  var percents = salePercents(list);
+  var partial = coverage === 'partial';
+  if (!percents.length) return partial ? 'SELECT SALE' : 'SALE';
+
+  var max = Math.max.apply(null, percents);
+  var min = Math.min.apply(null, percents);
+  var rate = (min === max ? '' : 'UP TO ') + max + '%';
+  return partial ? 'SELECT ' + rate : rate;
+}
+
+/* What a screen reader hears. The badge's own text leans on being seen — a
+   plum tag against a collection's name — and "30%" alone says nothing about
+   what the thirty per cent is of. Spelled out here so the heading announces
+   "Roselle, 30% off" rather than "Roselle 30%", and said once: an aria-label
+   replaces the element's text for assistive technology, it does not add to it. */
+function discountBadgeLabel(list, coverage) {
+  var percents = salePercents(list);
+  var partial = coverage === 'partial';
+  if (!percents.length) return partial ? 'Selected styles on sale' : 'On sale';
+
+  var max = Math.max.apply(null, percents);
+  var min = Math.min.apply(null, percents);
+  var rate = (min === max ? '' : 'up to ') + max + '% off';
+  return partial ? 'Selected styles ' + rate : rate.charAt(0).toUpperCase() + rate.slice(1);
+}
+
+/* What a campaign that points at a collection should say about that
+ * collection's prices today, or null if it should say nothing.
+ *
+ * The collection is found the way a visitor finds it — through the address the
+ * campaign already carries — and its pieces are gathered with inCollection,
+ * the same test the collection page itself uses. So the line can only ever
+ * describe the set the visitor will actually land on. No campaign is tied to a
+ * sale, and nothing here reads a sale's own configuration: several collections
+ * under one campaign-wide sale each answer for themselves, and a piece pulled
+ * to a different rate by a more specific sale is counted at the rate it
+ * resolved to.
+ *
+ * PRODUCTS holds only what the endpoint published, so a piece that is hidden,
+ * unpublished or archived is absent from both the count and the coverage. */
+function collectionCampaignSale(c) {
+  if (!c || blank(c.cta_href)) return null;
+  var m = /^#\/collection\/(.+)$/.exec(c.cta_href);
+  if (!m) return null;                       /* an edit, view-all, or nothing */
+  if (catalogue.status !== 'ready') return null;
+
+  var collection = findCollectionBySlug(decodeURIComponent(m[1]));
+  if (!collection) return null;
+
+  var eligible = PRODUCTS.filter(function (p) { return inCollection(p, collection); });
+  if (!eligible.length) return null;
+  var reduced = eligible.filter(function (p) { return p.isOnSale; });
+  if (!reduced.length) return null;
+
+  var coverage = reduced.length === eligible.length ? 'full' : 'partial';
+  return {
+    coverage: coverage,
+    badge: discountBadge(reduced, coverage),
+    label: discountBadgeLabel(reduced, coverage)
+  };
+}
+
+/* The app's block, made safe to read. Absent, unparseable, or written before
+   the Sale Edit existed all mean the same thing: no section. */
+function saleCampaign() {
+  var c = HOMEPAGE && HOMEPAGE.sale_campaign;
+  return (c && typeof c === 'object') ? c : null;
+}
+
+function renderSaleEdit() {
+  var section = byId('sale-edit');
+  if (!section) return;
+
+  var cfg = saleCampaign();
+  var reduced = catalogue.status === 'ready' ? saleProducts() : [];
+
+  /* Two independent switches, and both have to be on. The app decides whether
+     it wants the creative; the catalogue decides whether there is anything to
+     point at. A section advertising a sale with nothing in it would be the
+     worse failure, so the catalogue has the final say. */
+  if (!cfg || cfg.show !== true || !reduced.length) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  section.setAttribute('data-theme', cfg.theme || 'default');
+
+  var heading = blank(cfg.heading) ? SALE_EDIT_HEADING : cfg.heading;
+  byId('sale-edit-heading').textContent = heading;
+
+  var line = saleDiscountLine(reduced);
+  var pct = byId('sale-edit-percent');
+  pct.textContent = line;
+  pct.classList.toggle('hidden', !line);
+
+  /* The app's own words, or none. Nothing is written on its behalf. */
+  var sub = byId('sale-edit-sub');
+  sub.textContent = blank(cfg.subheading) ? '' : cfg.subheading;
+  sub.classList.toggle('hidden', blank(cfg.subheading));
+
+  var cta = byId('sale-edit-cta');
+  cta.textContent = blank(cfg.cta_label) ? SALE_EDIT_CTA : cfg.cta_label;
+  /* Always #/sale. There is no destination to configure and nothing to
+     resolve — see publicSaleCampaign in api/site-settings.js. */
+  cta.setAttribute('href', '#/sale');
+  cta.classList.toggle('hidden', cfg.show_cta === false);
+
+  /* The picture, framed the way a campaign's is: the same crop variables, the
+     same poster-for-a-film rule. Rebuilt only when it changes, so re-rendering
+     the homepage does not re-fetch it. */
+  var media = byId('sale-edit-media');
+  var key = (cfg.media_url || '') + '|' + (cfg.media_poster_url || '')
+    + '|' + cropVars(cfg);
+  section.classList.toggle('has-media', hasArtwork(cfg));
+  if (!hasArtwork(cfg)) {
+    if (media.dataset.key) { media.dataset.key = ''; media.innerHTML = ''; }
+    media.classList.add('hidden');
+    return;
+  }
+  media.classList.remove('hidden');
+  if (media.dataset.key === key) return;
+  media.dataset.key = key;
+  media.setAttribute('style', cropVars(cfg));
+  var src = cfg.media_type === 'video' ? cfg.media_poster_url : cfg.media_url;
+  media.innerHTML = blank(src) ? ''
+    : '<img src="' + esc(src) + '" alt="" loading="lazy" decoding="async">';
+}
+
 /* Sale is in the navigation only while something is actually reduced.
 
    There is no setting behind it: a campaign that has ended, been deleted or
@@ -868,7 +1065,8 @@ function featuredEditTitle(cfg) {
    so nothing is built twice and a section that is not mentioned keeps working.
    Sections that render nothing are already hidden by their own renderers, so a
    disabled one leaves no gap here either. */
-var SECTION_NODES = { campaign: '.hero', featured_edit: '#featured', new_arrivals: '#new-arrivals' };
+var SECTION_NODES = { campaign: '.hero', sale_campaign: '#sale-edit',
+  featured_edit: '#featured', new_arrivals: '#new-arrivals' };
 
 function applySectionOrder() {
   var order = HOMEPAGE && HOMEPAGE.section_order;
@@ -1505,11 +1703,24 @@ function cropVars(c) {
 function campaignSlideHTML(c, i) {
   var label = campaignLabel(c, i);
   var href = campaignHref(c);
+  /* Worked out once per campaign per render, here rather than in the markup
+     below, so the collection is resolved and its pieces counted a single time
+     for this slide. There are a handful of campaigns; this stays cheap. */
+  var sale = collectionCampaignSale(c);
 
   return '<div class="hero-slide' + (hasArtwork(c) ? ' has-media' : '')
     + '" data-slide="' + i + '">'
     + '<div class="hero-copy">'
-    + '<h2 class="display">' + esc(label) + '</h2>'
+    /* The badge sits inside the heading rather than beside it, which is what
+       makes it behave: it flows after the last word, so it stays on the
+       collection's line when there is room and wraps with the name when there
+       is not — no overlap, no shrinking, no reaching the far edge of a phone.
+       Real text, and written only while it is true; the stored heading and
+       subheading are never touched. */
+    + '<h2 class="display">' + esc(label)
+    + (sale ? ' <span class="sale-badge" aria-label="' + esc(sale.label) + '">'
+      + esc(sale.badge) + '</span>' : '')
+    + '</h2>'
     + (blank(c.subheading) ? '' : '<p class="lede">' + esc(c.subheading) + '</p>')
     + (campaignShowsCta(c)
       ? '<a class="pill pill-dark slide-cta" href="' + esc(href) + '">'
@@ -1984,6 +2195,7 @@ function renderGrids() {
   renderCampaign();
   renderEditsNav();
   renderSaleNav();
+  renderSaleEdit();
   applySectionOrder();
   renderCollectionNav();
   renderHomeSections();
@@ -2034,6 +2246,10 @@ function renderGrids() {
     missing ? ''
     : catalogue.status === 'loading' ? 'Loading the collection…'
     : catalogue.status === 'error' ? 'We couldn’t load the collection. Please try again.'
+    /* A sale page with nothing on it is a real state — a link kept from a
+       campaign that has ended, or one followed a minute too late. It says so
+       plainly rather than counting to zero, and the way on is the catalogue. */
+    : (onSale && !shown.length) ? 'Nothing is reduced just now. The collection is all here.'
     : collectionCount(shown.length);
   Array.prototype.forEach.call(byId('filters').children, function (b) {
     b.setAttribute('aria-pressed', String(b.dataset.filter === state.filter));

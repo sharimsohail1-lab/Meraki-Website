@@ -35,7 +35,11 @@ var CTA_TYPES = ['none', 'collection', 'curated_edit', 'view_all'];
 var SOURCE_TYPES = ['collection', 'products', 'new_arrivals'];
 /* The homepage's movable sections. Anything outside this list is a key the
    website does not know how to render, and is dropped rather than guessed at. */
-var SECTION_KEYS = ['campaign', 'featured_edit', 'new_arrivals'];
+/* sale_campaign joins these so the app can place the Sale Edit in the order.
+   A key not on this list is dropped by publicSectionOrder, which is why a save
+   made before the storefront knew the key was harmless — and why adding it
+   here is what makes it arrive at all. */
+var SECTION_KEYS = ['campaign', 'sale_campaign', 'featured_edit', 'new_arrivals'];
 var COUNT_MIN = 3;
 var COUNT_MAX = 8;
 
@@ -238,6 +242,50 @@ function publicCampaign(raw, ctx) {
   return says ? campaign : null;
 }
 
+/* The Sale Edit: one reusable piece of creative standing for whatever happens
+ * to be reduced today.
+ *
+ * It is a sibling of campaigns[], not a member of it, and this function is
+ * separate from publicCampaign for the reason the app keeps it separate. A
+ * campaign is aimed — at a collection, an edit, a piece — and resolveCta works
+ * out where. The Sale Edit is aimed at one address that never changes, so it
+ * carries no destination, no source reference and no campaign id, and there is
+ * nothing here for a destination resolver to do.
+ *
+ * What it does share is how a picture is treated: the same media/type pairing,
+ * the same poster rule, the same crop shape, the same theme list.
+ *
+ * `show` is the app's switch and is passed through as the app set it. Whether
+ * the section actually appears is not decided here — it also depends on
+ * something being on sale, which this endpoint does not know. */
+function publicSaleCampaign(raw) {
+  if (!isObject(raw)) return null;
+
+  var mediaUrl = text(raw.media_url);
+  var mediaType = oneOf(text(raw.media_type), ['image', 'video'], null);
+  /* One implies the other, exactly as for a campaign. */
+  if (!mediaUrl || !mediaType) { mediaUrl = null; mediaType = null; }
+
+  return {
+    /* Explicit only. Unlike a campaign, whose absent flag means "written before
+       the switch existed", the Sale Edit has never existed without one — so
+       anything short of true is off. */
+    show: raw.show === true,
+    heading: text(raw.heading),
+    subheading: text(raw.subheading),
+    media_type: mediaType,
+    media_url: mediaUrl,
+    media_poster_url: mediaType === 'video' ? text(raw.media_poster_url) : null,
+    theme: oneOf(text(raw.theme), THEMES, 'default'),
+    show_cta: raw.show_cta !== false,
+    cta_label: text(raw.cta_label),
+    media_crop_mobile: mediaUrl ? publicCrop(raw.media_crop_mobile) : null,
+    media_crop_desktop: mediaUrl ? publicCrop(raw.media_crop_desktop) : null
+    /* Deliberately no cta_href: the destination is #/sale and the storefront
+       knows it. Sending one would invite a future edit to point it elsewhere. */
+  };
+}
+
 function publicFeaturedEdit(raw, ctx) {
   if (!isObject(raw)) return null;
   var sourceType = oneOf(text(raw.source_type), SOURCE_TYPES, 'new_arrivals');
@@ -364,6 +412,9 @@ function publicHomepage(rawConfig, ctx) {
        carousels existed still finds the hero it knows how to render. It goes
        when the app retires its own singular mirror. */
     campaign: publicCampaign(cfg.campaign, ctx),
+    /* A sibling of campaigns[], never a member. Nothing downstream merges it
+       into the carousel or into the legacy singular mirror above. */
+    sale_campaign: publicSaleCampaign(cfg.sale_campaign),
     featured_edit: publicFeaturedEdit(cfg.featured_edit, ctx),
     new_arrivals: publicNewArrivals(cfg.new_arrivals, cfg.new_arrivals_selection)
     /* customer_looks is reserved and deliberately not surfaced. */
@@ -504,4 +555,5 @@ module.exports.clampCount = clampCount;
 module.exports.publicSectionOrder = publicSectionOrder;
 module.exports.publicCampaign = publicCampaign;
 module.exports.publicCrop = publicCrop;
+module.exports.publicSaleCampaign = publicSaleCampaign;
 module.exports.resolveCtaHref = resolveCtaHref;
